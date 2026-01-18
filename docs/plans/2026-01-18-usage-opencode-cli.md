@@ -10,6 +10,16 @@
 
 ---
 
+## Progress (So Far)
+
+Completed tasks/commits:
+- Task 1 (bootstrap project): `b1e9ab2`
+- Task 2 (storage): `faed7c8`
+- Task 3 (PKCE auth URL builder): `b12bfef`
+- Task 4 (token exchange + refresh): `0bbbb88`
+
+---
+
 ## Requirements (Validated)
 
 - Dual identity (two OAuth clients per Google account)
@@ -84,6 +94,7 @@ Schema (v1):
 Notes:
 - Only refresh tokens are persisted.
 - Access tokens are ephemeral (typically ~1 hour, via `expires_in`) and kept in-memory.
+- `expiresAt` is tracked as unix seconds (see `src/oauth/token.ts`).
 - `status` will automatically refresh access tokens as needed using the stored refresh token.
 - Re-login is only needed if Google revokes the refresh token (usually surfaces as `invalid_grant`) or if Google never returned a refresh token during login.
 
@@ -112,8 +123,13 @@ export interface AccountQuotaReport {
 ## Google/OAuth Details
 
 Two OAuth client configs:
-- Antigravity client id/secret (already known in repo)
-- Gemini CLI client id/secret (already known in repo)
+- Antigravity client id/secret
+- Gemini CLI client id/secret
+
+Secrets handling (important):
+- Do NOT commit real client secrets into `usage-opencode/`.
+- Prefer loading client ids/secrets from env vars (e.g. `USAGE_OAUTH_ANTIGRAVITY_CLIENT_ID`, `USAGE_OAUTH_ANTIGRAVITY_CLIENT_SECRET`, `USAGE_OAUTH_GEMINI_CLI_CLIENT_ID`, `USAGE_OAUTH_GEMINI_CLI_CLIENT_SECRET`).
+- In code, keep placeholders only (current state in `src/oauth/constants.ts`).
 
 OAuth flow (both identities):
 - Authorization URL: `https://accounts.google.com/o/oauth2/v2/auth`
