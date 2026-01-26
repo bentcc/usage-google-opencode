@@ -17,6 +17,8 @@ Completed tasks/commits:
 - Task 2 (storage): `faed7c8`
 - Task 3 (PKCE auth URL builder): `b12bfef`
 - Task 4 (token exchange + refresh): `0bbbb88`
+- Task 5 (fetch user email): `4bb469e`
+- Task 6 (quota + project ID): `82ebe61`
 
 ---
 
