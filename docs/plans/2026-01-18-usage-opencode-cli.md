@@ -19,6 +19,7 @@ Completed tasks/commits:
 - Task 4 (token exchange + refresh): `0bbbb88`
 - Task 5 (fetch user email): `4bb469e`
 - Task 6 (quota + project ID): `82ebe61`
+- Task 7 (status command): `2aa110b`
 
 ---
 
