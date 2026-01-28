@@ -21,9 +21,9 @@ describe("cli", () => {
     expect(res.stderr).toContain("Unknown command");
   });
 
-  it("login command returns not implemented message", async () => {
-    const res = await runCli(["login"]);
+  it("login command validates mode", async () => {
+    const res = await runCli(["login", "--mode", "invalid"]);
     expect(res.exitCode).toBe(1);
-    expect(res.stderr).toContain("not yet implemented");
+    expect(res.stderr).toContain("Invalid mode");
   });
 });

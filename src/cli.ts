@@ -1,4 +1,5 @@
 import { runStatus, type OutputFormat } from "./commands/status";
+import { runLogin, type LoginMode } from "./commands/login";
 import type { QuotaIdentity } from "./oauth/constants";
 
 export type CliResult = {
@@ -110,12 +111,42 @@ export async function runCli(argv: string[]): Promise<CliResult> {
     }
 
     case "login": {
-      // Login command will be implemented in Task 8
-      return {
-        exitCode: 1,
-        stdout: "",
-        stderr: "Login command not yet implemented. Coming in Task 8.\n",
-      };
+      // Validate mode if provided
+      const mode = args.mode;
+      if (mode && mode !== "antigravity" && mode !== "gemini-cli" && mode !== "both") {
+        return {
+          exitCode: 1,
+          stdout: "",
+          stderr: `Invalid mode: ${mode}. Must be antigravity, gemini-cli, or both.\n`,
+        };
+      }
+
+      try {
+        const result = await runLogin({
+          mode: mode as LoginMode | undefined,
+        });
+
+        if (!result.success) {
+          return {
+            exitCode: 1,
+            stdout: "",
+            stderr: `Login failed: ${result.error}\n`,
+          };
+        }
+
+        const identities = result.identitiesCompleted.join(", ");
+        return {
+          exitCode: 0,
+          stdout: `Successfully logged in as ${result.email} (${identities})\n`,
+          stderr: "",
+        };
+      } catch (error) {
+        return {
+          exitCode: 2,
+          stdout: "",
+          stderr: `Error: ${error instanceof Error ? error.message : String(error)}\n`,
+        };
+      }
     }
 
     default: {
