@@ -20,7 +20,7 @@ Completed tasks/commits:
 - Task 5 (fetch user email): `4bb469e`
 - Task 6 (quota + project ID): `82ebe61`
 - Task 7 (status command): `2aa110b`
-- Task 8 (login command): `pending`
+- Task 8 (login command): `089090b`
 
 ---
 
