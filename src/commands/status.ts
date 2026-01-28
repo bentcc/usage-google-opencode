@@ -9,6 +9,8 @@ import { loadStore as defaultLoadStore } from "../storage";
 import { refreshAccessToken as defaultRefreshAccessToken } from "../oauth/token";
 import { ensureProjectId as defaultEnsureProjectId } from "../google/project";
 import { fetchQuota as defaultFetchQuota, type ModelQuota } from "../google/quota";
+import { renderTable } from "../output/table";
+import { renderJson } from "../output/json";
 
 /**
  * Quota report for a single account + identity combination.
@@ -30,6 +32,7 @@ export interface IdentityError {
   identity: QuotaIdentity;
   error: string;
   needsRelogin: boolean;
+  isForbidden: boolean;
 }
 
 /**
@@ -94,6 +97,19 @@ function isInvalidGrantError(error: unknown): boolean {
 }
 
 /**
+ * Determines if an error is a 403 Forbidden error.
+ */
+function isForbiddenError(error: unknown): boolean {
+  if (error instanceof Error) {
+    const anyError = error as any;
+    if (anyError.status === 403) return true;
+    if (error.message?.includes("403")) return true;
+    if (error.message?.toLowerCase().includes("forbidden")) return true;
+  }
+  return false;
+}
+
+/**
  * Fetches quota for a single identity of an account.
  */
 async function fetchIdentityQuota(
@@ -132,100 +148,17 @@ async function fetchIdentityQuota(
     };
   } catch (error) {
     const needsRelogin = isInvalidGrantError(error);
+    const isForbidden = isForbiddenError(error);
     return {
       error: {
         email: account.email,
         identity,
         error: error instanceof Error ? error.message : String(error),
         needsRelogin,
+        isForbidden,
       },
     };
   }
-}
-
-/**
- * Renders a table of quota reports.
- */
-function renderTable(reports: AccountQuotaReport[], errors: IdentityError[]): string {
-  if (reports.length === 0 && errors.length === 0) {
-    return "No accounts found. Run `usage-opencode login` to add an account.\n";
-  }
-
-  const lines: string[] = [];
-
-  // Header
-  lines.push("┌" + "─".repeat(76) + "┐");
-  lines.push(
-    "│ " +
-      "Email".padEnd(25) +
-      "Identity".padEnd(14) +
-      "Model".padEnd(20) +
-      "Remaining".padEnd(10) +
-      "Reset │"
-  );
-  lines.push("├" + "─".repeat(76) + "┤");
-
-  // Data rows
-  for (const report of reports) {
-    for (const model of report.models) {
-      const email = report.email.slice(0, 24).padEnd(25);
-      const identity = report.identity.padEnd(14);
-      const modelName = model.model.slice(0, 19).padEnd(20);
-      const remaining = `${model.remainingPercent}%`.padEnd(10);
-      const reset = model.resetTime ? formatResetTime(model.resetTime) : "-";
-      lines.push(`│ ${email}${identity}${modelName}${remaining}${reset.slice(0, 5).padEnd(5)} │`);
-    }
-  }
-
-  // Error rows
-  for (const err of errors) {
-    const email = err.email.slice(0, 24).padEnd(25);
-    const identity = err.identity.padEnd(14);
-    const status = err.needsRelogin ? "Needs relogin" : "Error";
-    lines.push(`│ ${email}${identity}${status.padEnd(20)}${"".padEnd(10)}${"".padEnd(5)} │`);
-  }
-
-  lines.push("└" + "─".repeat(76) + "┘");
-
-  // Footer with action required
-  const needsRelogin = errors.filter((e) => e.needsRelogin);
-  if (needsRelogin.length > 0) {
-    lines.push("");
-    lines.push("Action required:");
-    for (const err of needsRelogin) {
-      lines.push(`  usage-opencode login --mode ${err.identity} --account ${err.email}`);
-    }
-  }
-
-  return lines.join("\n") + "\n";
-}
-
-/**
- * Formats reset time for table display.
- */
-function formatResetTime(resetTime: string): string {
-  try {
-    const date = new Date(resetTime);
-    const now = new Date();
-    const diffMs = date.getTime() - now.getTime();
-
-    if (diffMs < 0) return "now";
-
-    const hours = Math.floor(diffMs / (1000 * 60 * 60));
-    const mins = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
-
-    if (hours > 0) return `${hours}h${mins}m`;
-    return `${mins}m`;
-  } catch {
-    return resetTime.slice(0, 10);
-  }
-}
-
-/**
- * Renders reports as JSON.
- */
-function renderJson(reports: AccountQuotaReport[]): string {
-  return JSON.stringify(reports, null, 2);
 }
 
 /**
@@ -279,7 +212,7 @@ export async function runStatus(options: StatusOptions = {}): Promise<StatusResu
   }
 
   // Render output
-  const output = format === "json" ? renderJson(reports) : renderTable(reports, errors);
+  const output = format === "json" ? renderJson(reports, errors) : renderTable(reports, errors);
 
   return { reports, errors, output };
 }

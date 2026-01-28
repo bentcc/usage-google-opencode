@@ -65,8 +65,9 @@ describe("status command", () => {
     const result = await runStatus({ deps, format: "json" });
 
     const parsed = JSON.parse(result.output);
-    expect(parsed).toHaveLength(2);
-    expect(parsed[0].email).toBe("user@example.com");
+    expect(parsed.reports).toHaveLength(2);
+    expect(parsed.reports[0].email).toBe("user@example.com");
+    expect(parsed.errors).toHaveLength(0);
   });
 
   it("handles accounts with only antigravity identity", async () => {
