@@ -3,6 +3,15 @@ import { runStatus, type StatusDeps, type AccountQuotaReport } from "../commands
 import type { UsageOpencodeStore } from "../storage.js";
 
 describe("status command", () => {
+  const createDeferred = <T,>() => {
+    let resolve: (value: T) => void;
+    let reject: (reason?: unknown) => void;
+    const promise = new Promise<T>((res, rej) => {
+      resolve = res;
+      reject = rej;
+    });
+    return { promise, resolve: resolve!, reject: reject! };
+  };
   const mockStore: UsageOpencodeStore = {
     version: 1,
     accounts: [
@@ -38,6 +47,28 @@ describe("status command", () => {
     // Should refresh tokens for both antigravity and gemini-cli
     expect(deps.refreshAccessToken).toHaveBeenCalledTimes(2);
     expect(deps.fetchQuota).toHaveBeenCalledTimes(2);
+  });
+
+  it("starts identity quota fetches in parallel", async () => {
+    const deps = createMockDeps();
+    const tokenA = createDeferred<{ accessToken: string; expiresAt: number }>();
+    const tokenB = createDeferred<{ accessToken: string; expiresAt: number }>();
+
+    deps.refreshAccessToken = vi
+      .fn()
+      .mockImplementationOnce(() => tokenA.promise)
+      .mockImplementationOnce(() => tokenB.promise);
+
+    const statusPromise = runStatus({ deps });
+
+    await Promise.resolve();
+
+    expect(deps.refreshAccessToken).toHaveBeenCalledTimes(2);
+
+    tokenA.resolve({ accessToken: "token-a", expiresAt: Date.now() / 1000 + 3600 });
+    tokenB.resolve({ accessToken: "token-b", expiresAt: Date.now() / 1000 + 3600 });
+
+    await statusPromise;
   });
 
   it("returns quota reports for each identity", async () => {

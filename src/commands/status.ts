@@ -187,40 +187,33 @@ export async function runStatus(options: StatusOptions = {}): Promise<StatusResu
 
   const reports: AccountQuotaReport[] = [];
   const errors: IdentityError[] = [];
+  const tasks: Array<Promise<{ report?: AccountQuotaReport; error?: IdentityError }>> = [];
 
-  // Process each account
+  // Queue quota fetches for all accounts/identities
   for (const account of accounts) {
-    // Process antigravity identity
     if (account.antigravity?.refreshToken) {
       if (!options.identityFilter || options.identityFilter === "antigravity") {
         const oauthClient = store.oauthClients?.antigravity;
-        const result = await fetchIdentityQuota(
-          account,
-          "antigravity",
-          account.antigravity,
-          deps,
-          oauthClient,
+        tasks.push(
+          fetchIdentityQuota(account, "antigravity", account.antigravity, deps, oauthClient),
         );
-        if (result.report) reports.push(result.report);
-        if (result.error) errors.push(result.error);
       }
     }
 
-    // Process gemini-cli identity
     if (account.geminiCli?.refreshToken) {
       if (!options.identityFilter || options.identityFilter === "gemini-cli") {
         const oauthClient = store.oauthClients?.["gemini-cli"];
-        const result = await fetchIdentityQuota(
-          account,
-          "gemini-cli",
-          account.geminiCli,
-          deps,
-          oauthClient,
+        tasks.push(
+          fetchIdentityQuota(account, "gemini-cli", account.geminiCli, deps, oauthClient),
         );
-        if (result.report) reports.push(result.report);
-        if (result.error) errors.push(result.error);
       }
     }
+  }
+
+  const results = await Promise.all(tasks);
+  for (const result of results) {
+    if (result.report) reports.push(result.report);
+    if (result.error) errors.push(result.error);
   }
 
   // Render output
