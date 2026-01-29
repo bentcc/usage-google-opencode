@@ -9,11 +9,12 @@ export type UsageOpencodeStore = {
 
 export type UsageOpencodeIdentity = {
   refreshToken: string;
+  projectId?: string; // Identity-specific project ID
 };
 
 export type UsageOpencodeAccount = {
   email: string;
-  projectId?: string;
+  projectId?: string; // Legacy: shared project ID (deprecated, kept for migration)
   antigravity?: UsageOpencodeIdentity;
   geminiCli?: UsageOpencodeIdentity;
   addedAt: number;

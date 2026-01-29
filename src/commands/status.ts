@@ -62,6 +62,7 @@ export interface StatusDeps {
   fetchQuota: (input: {
     accessToken: string;
     projectId: string;
+    identity?: QuotaIdentity;
     fetchImpl?: (input: string | URL, init?: RequestInit) => Promise<Response>;
   }) => Promise<ModelQuota[]>;
 }
@@ -115,26 +116,30 @@ function isForbiddenError(error: unknown): boolean {
 async function fetchIdentityQuota(
   account: UsageOpencodeAccount,
   identity: QuotaIdentity,
-  refreshToken: string,
+  identityData: { refreshToken: string; projectId?: string },
   deps: StatusDeps
 ): Promise<{ report?: AccountQuotaReport; error?: IdentityError }> {
   try {
     // Refresh access token
     const { accessToken } = await deps.refreshAccessToken({
       identity,
-      refreshToken,
+      refreshToken: identityData.refreshToken,
     });
 
-    // Ensure project ID
+    // Get identity-specific project ID, falling back to account-level (legacy)
+    const storedProjectId = identityData.projectId ?? account.projectId;
+
+    // Ensure project ID (discover if not stored)
     const projectId = await deps.ensureProjectId({
       accessToken,
-      projectId: account.projectId,
+      projectId: storedProjectId,
     });
 
     // Fetch quotas
     const models = await deps.fetchQuota({
       accessToken,
       projectId,
+      identity,
     });
 
     return {
@@ -188,7 +193,7 @@ export async function runStatus(options: StatusOptions = {}): Promise<StatusResu
         const result = await fetchIdentityQuota(
           account,
           "antigravity",
-          account.antigravity.refreshToken,
+          account.antigravity,
           deps
         );
         if (result.report) reports.push(result.report);
@@ -202,7 +207,7 @@ export async function runStatus(options: StatusOptions = {}): Promise<StatusResu
         const result = await fetchIdentityQuota(
           account,
           "gemini-cli",
-          account.geminiCli.refreshToken,
+          account.geminiCli,
           deps
         );
         if (result.report) reports.push(result.report);

@@ -4,7 +4,7 @@
 
 **Goal:** Build a standalone CLI that logs into Google OAuth (Antigravity + Gemini CLI as two distinct OAuth clients) and prints per-account model quota availability as remaining % plus reset time.
 
-**Architecture:** A Node.js + TypeScript CLI that stores account refresh tokens in `~/.config/opencode/usage-opencode-accounts.json`, refreshes access tokens on demand, calls Google Cloud Code internal endpoints to fetch available model quotas, and renders a table by default (with optional JSON output).
+**Architecture:** A Node.js + TypeScript CLI that stores account refresh tokens in `~/.config/opencode/usage-opencode-accounts.json`, refreshes access tokens on demand, calls Google Cloud Code internal endpoints to fetch available model quotas (`fetchAvailableModels` for antigravity, `retrieveUserQuota` for gemini-cli), and renders a table by default (with optional JSON output).
 
 **Tech Stack:** Node.js (>=20), TypeScript, Vitest, undici/fetch (built-in), `@openauthjs/openauth` (PKCE), minimal CLI arg parsing (or `commander`).
 
@@ -22,6 +22,12 @@ Completed tasks/commits:
 - Task 7 (status command): `2aa110b`
 - Task 8 (login command): `089090b`
 - Task 9 (output formatting): `8887922`
+- Task 10 (E2E verification): Completed 2026-01-28
+  - Login tested: `usage-opencode login --mode both` ✓
+  - Status tested: antigravity + gemini-cli models visible ✓
+  - Remaining % verified: All at 100% (reasonable) ✓
+  - Reset times populated: e.g., "2026-01-30T10:55:08Z" ✓
+  - Gemini-CLI: Uses `retrieveUserQuota` with project ID ✓
 
 ---
 
@@ -62,6 +68,7 @@ Commands:
 - `usage-opencode login` (interactive)
   - Ensures both identities are connected for an email.
   - Can support `--mode antigravity|gemini-cli|both` (default: both).
+  - Gemini CLI requires a project ID: `--project <gcp-project-id>`.
 - `usage-opencode status`
   - Fetches quota for all stored accounts (both quota types if present).
   - Default output: table.
@@ -86,9 +93,9 @@ Schema (v1):
   "accounts": [
     {
       "email": "user@example.com",
-      "projectId": "optional-known-project",
+      "projectId": "optional-legacy-shared-project",
       "antigravity": { "refreshToken": "..." },
-      "geminiCli": { "refreshToken": "..." },
+      "geminiCli": { "refreshToken": "...", "projectId": "my-gcp-project" },
       "addedAt": 0,
       "updatedAt": 0
     }
@@ -154,8 +161,13 @@ Implementation choices:
 
 ## Quota Fetch Details
 
-Primary endpoint:
+Primary endpoint (antigravity):
 - `POST https://cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels`
+- Body: `{ "project": "<projectId>" }`
+- Auth: `Authorization: Bearer <access token>`
+
+Primary endpoint (gemini-cli):
+- `POST https://cloudcode-pa.googleapis.com/v1internal:retrieveUserQuota`
 - Body: `{ "project": "<projectId>" }`
 - Auth: `Authorization: Bearer <access token>`
 
@@ -164,7 +176,8 @@ Project ID resolution (if missing):
 - Body: `{ "metadata": { ... } }` (minimal metadata is fine)
 
 Parsing:
-- API returns `models: Record<string, { quotaInfo?: { remainingFraction?: number; resetTime?: string } }>`
+- `fetchAvailableModels` returns `models: Record<string, { quotaInfo?: { remainingFraction?: number; resetTime?: string } }>`
+- `retrieveUserQuota` returns `buckets: Array<{ modelId?: string; remainingFraction?: number; resetTime?: string }>`
 - Convert `remainingFraction` to percent: `Math.floor(remainingFraction * 100)`
 - Keep `resetTime` as string
 

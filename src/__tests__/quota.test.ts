@@ -4,7 +4,7 @@ import {
   parseQuotaResponse,
   fetchQuota,
   QuotaError,
-  FETCH_AVAILABLE_MODELS_ENDPOINT,
+  FETCH_AVAILABLE_MODELS_ENDPOINTS,
 } from "../google/quota";
 
 interface FakeCall {
@@ -114,9 +114,9 @@ describe("fetchQuota", () => {
       fetchImpl: fakeFetch,
     });
 
-    // Assert - verify request
+    // Assert - verify request (uses first endpoint in array)
     expect(calls).toHaveLength(1);
-    expect(calls[0].url).toBe(FETCH_AVAILABLE_MODELS_ENDPOINT);
+    expect(calls[0].url).toBe(FETCH_AVAILABLE_MODELS_ENDPOINTS[0]);
     expect(calls[0].init.method).toBe("POST");
 
     const headers = calls[0].init.headers as Record<string, string>;
@@ -135,18 +135,18 @@ describe("fetchQuota", () => {
     });
   });
 
-  it("throws QuotaError on non-ok response", async () => {
+  it("throws QuotaError with Forbidden message on 403 response", async () => {
     // Arrange
     const { fetch: fakeFetch } = createFakeFetch({ error: "forbidden" }, 403);
 
-    // Act & Assert
+    // Act & Assert - 403 should throw immediately with "Forbidden"
     await expect(
       fetchQuota({
         accessToken: "bad-token",
         projectId: "project",
         fetchImpl: fakeFetch,
       }),
-    ).rejects.toThrow("Failed to fetch quota");
+    ).rejects.toThrow("Forbidden");
 
     try {
       await fetchQuota({
@@ -158,5 +158,78 @@ describe("fetchQuota", () => {
       expect(err).toBeInstanceOf(QuotaError);
       expect((err as QuotaError).status).toBe(403);
     }
+  });
+
+  it("includes identity-specific headers for antigravity", async () => {
+    // Arrange
+    const apiResponse = { models: {} };
+    const { fetch: fakeFetch, calls } = createFakeFetch(apiResponse);
+
+    // Act
+    await fetchQuota({
+      accessToken: "test-token",
+      projectId: "my-project",
+      identity: "antigravity",
+      fetchImpl: fakeFetch,
+    });
+
+    // Assert - verify antigravity headers
+    const headers = calls[0].init.headers as Record<string, string>;
+    expect(headers["User-Agent"]).toContain("antigravity");
+    expect(headers["X-Goog-Api-Client"]).toContain("vscode_cloudshelleditor");
+  });
+
+  it("includes identity-specific headers for gemini-cli", async () => {
+    // Arrange
+    const apiResponse = { models: {} };
+    const { fetch: fakeFetch, calls } = createFakeFetch(apiResponse);
+
+    // Act
+    await fetchQuota({
+      accessToken: "test-token",
+      projectId: "my-project",
+      identity: "gemini-cli",
+      fetchImpl: fakeFetch,
+    });
+
+    // Assert - verify gemini-cli headers
+    const headers = calls[0].init.headers as Record<string, string>;
+    expect(headers["User-Agent"]).toContain("google-api-nodejs-client");
+    expect(headers["X-Goog-Api-Client"]).toContain("gl-node");
+  });
+
+  it("uses retrieveUserQuota for gemini-cli and parses bucket models", async () => {
+    // Arrange
+    const apiResponse = {
+      buckets: [
+        {
+          modelId: "gemini-2.5-flash",
+          remainingFraction: 0.5,
+          resetTime: "2026-01-30T10:52:51Z",
+        },
+      ],
+    };
+    const { fetch: fakeFetch, calls } = createFakeFetch(apiResponse);
+
+    // Act
+    const result = await fetchQuota({
+      accessToken: "test-token",
+      projectId: "my-project",
+      identity: "gemini-cli",
+      fetchImpl: fakeFetch,
+    });
+
+    // Assert - endpoint should be retrieveUserQuota
+    expect(calls).toHaveLength(1);
+    expect(calls[0].url).toContain("retrieveUserQuota");
+
+    // Assert - parsed result from buckets
+    expect(result).toEqual([
+      {
+        model: "gemini-2.5-flash",
+        remainingPercent: 50,
+        resetTime: "2026-01-30T10:52:51Z",
+      },
+    ]);
   });
 });

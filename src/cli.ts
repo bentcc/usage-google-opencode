@@ -20,11 +20,17 @@ Options:
   --only <identity>    Filter to one identity: antigravity or gemini-cli
   --account <email>    Filter to a specific account
 
+Login Options:
+  --mode <mode>        Login mode: antigravity, gemini-cli, or both
+  --project <id>       GCP project ID for gemini-cli quota (required for gemini-cli)
+
 Examples:
   usage-opencode status
   usage-opencode status --format json
   usage-opencode status --only antigravity
   usage-opencode login --mode both
+  usage-opencode login --mode gemini-cli --project my-gcp-project
+  usage-opencode login --mode both --project my-gcp-project
 `;
 
 function parseArgs(argv: string[]): {
@@ -33,6 +39,7 @@ function parseArgs(argv: string[]): {
   identityFilter?: QuotaIdentity;
   accountFilter?: string;
   mode?: string;
+  project?: string;
   help?: boolean;
 } {
   const result: {
@@ -41,6 +48,7 @@ function parseArgs(argv: string[]): {
     identityFilter?: QuotaIdentity;
     accountFilter?: string;
     mode?: string;
+    project?: string;
     help?: boolean;
   } = { command: "" };
 
@@ -63,6 +71,8 @@ function parseArgs(argv: string[]): {
       result.accountFilter = argv[++i];
     } else if (arg === "--mode" && argv[i + 1]) {
       result.mode = argv[++i];
+    } else if (arg === "--project" && argv[i + 1]) {
+      result.project = argv[++i];
     } else if (!arg.startsWith("-") && !result.command) {
       result.command = arg;
     }
@@ -121,9 +131,16 @@ export async function runCli(argv: string[]): Promise<CliResult> {
         };
       }
 
+      // Warn if gemini-cli mode is used without --project
+      if ((mode === "gemini-cli" || mode === "both") && !args.project) {
+        console.log("Note: For gemini-cli quota, you may need to specify --project <gcp-project-id>");
+        console.log("      Get your project ID with: gcloud config get-value project\n");
+      }
+
       try {
         const result = await runLogin({
           mode: mode as LoginMode | undefined,
+          projectId: args.project,
         });
 
         if (!result.success) {

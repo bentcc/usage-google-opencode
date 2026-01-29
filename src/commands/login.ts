@@ -89,6 +89,7 @@ const defaultDeps: LoginDeps = {
 
 export interface LoginOptions {
   mode?: LoginMode;
+  projectId?: string; // Project ID to use for gemini-cli (required for gemini-cli identity)
   configDir?: string;
   deps?: LoginDeps;
 }
@@ -404,8 +405,16 @@ export async function runLogin(options: LoginOptions): Promise<LoginResult> {
 
     email = result.email;
 
-    // Update store with new identity
-    const identityData = { refreshToken: result.refreshToken };
+    // Update store with new identity (including projectId if provided)
+    const identityData: { refreshToken: string; projectId?: string } = {
+      refreshToken: result.refreshToken,
+    };
+
+    // For gemini-cli, store the provided projectId
+    if (identity === "gemini-cli" && options.projectId) {
+      identityData.projectId = options.projectId;
+    }
+
     const accountUpdate =
       identity === "antigravity"
         ? { email, antigravity: identityData }

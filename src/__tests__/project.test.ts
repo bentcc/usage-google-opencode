@@ -2,8 +2,8 @@ import { it, expect, describe } from "vitest";
 
 import {
   ensureProjectId,
-  ProjectError,
-  LOAD_CODE_ASSIST_ENDPOINT,
+  LOAD_CODE_ASSIST_ENDPOINTS,
+  DEFAULT_PROJECT_ID,
 } from "../google/project";
 
 interface FakeCall {
@@ -41,9 +41,9 @@ describe("ensureProjectId", () => {
   });
 
   it("fetches project ID from loadCodeAssist when not provided", async () => {
-    // Arrange
+    // Arrange - using cloudaicompanionProject field (the real response format)
     const apiResponse = {
-      projectId: "discovered-project-123",
+      cloudaicompanionProject: "discovered-project-123",
     };
     const { fetch: fakeFetch, calls } = createFakeFetch(apiResponse);
 
@@ -56,46 +56,56 @@ describe("ensureProjectId", () => {
     // Assert - verify request
     expect(result).toBe("discovered-project-123");
     expect(calls).toHaveLength(1);
-    expect(calls[0].url).toBe(LOAD_CODE_ASSIST_ENDPOINT);
+    expect(calls[0].url).toBe(LOAD_CODE_ASSIST_ENDPOINTS[0]);
     expect(calls[0].init.method).toBe("POST");
 
     const headers = calls[0].init.headers as Record<string, string>;
     expect(headers["Authorization"]).toBe("Bearer test-token");
   });
 
-  it("throws ProjectError when API fails", async () => {
-    // Arrange
-    const { fetch: fakeFetch } = createFakeFetch({ error: "forbidden" }, 403);
+  it("extracts projectId from cloudaicompanionProject object format", async () => {
+    // Arrange - the response can also have cloudaicompanionProject as object
+    const apiResponse = {
+      cloudaicompanionProject: { id: "project-from-object" },
+    };
+    const { fetch: fakeFetch } = createFakeFetch(apiResponse);
 
-    // Act & Assert
-    await expect(
-      ensureProjectId({
-        accessToken: "bad-token",
-        fetchImpl: fakeFetch,
-      }),
-    ).rejects.toThrow("Failed to discover project");
+    // Act
+    const result = await ensureProjectId({
+      accessToken: "test-token",
+      fetchImpl: fakeFetch,
+    });
 
-    try {
-      await ensureProjectId({
-        accessToken: "bad-token",
-        fetchImpl: fakeFetch,
-      });
-    } catch (err) {
-      expect(err).toBeInstanceOf(ProjectError);
-      expect((err as ProjectError).status).toBe(403);
-    }
+    // Assert
+    expect(result).toBe("project-from-object");
   });
 
-  it("throws ProjectError when projectId missing from response", async () => {
+  it("falls back to DEFAULT_PROJECT_ID when all endpoints fail", async () => {
+    // Arrange - all endpoints return 403
+    const { fetch: fakeFetch, calls } = createFakeFetch({ error: "forbidden" }, 403);
+
+    // Act
+    const result = await ensureProjectId({
+      accessToken: "bad-token",
+      fetchImpl: fakeFetch,
+    });
+
+    // Assert - tried all endpoints, returned default
+    expect(result).toBe(DEFAULT_PROJECT_ID);
+    expect(calls.length).toBe(LOAD_CODE_ASSIST_ENDPOINTS.length);
+  });
+
+  it("falls back to DEFAULT_PROJECT_ID when projectId missing from response", async () => {
     // Arrange
     const { fetch: fakeFetch } = createFakeFetch({ someOtherField: "value" });
 
-    // Act & Assert
-    await expect(
-      ensureProjectId({
-        accessToken: "token",
-        fetchImpl: fakeFetch,
-      }),
-    ).rejects.toThrow("projectId");
+    // Act
+    const result = await ensureProjectId({
+      accessToken: "token",
+      fetchImpl: fakeFetch,
+    });
+
+    // Assert - falls back to default, doesn't throw
+    expect(result).toBe(DEFAULT_PROJECT_ID);
   });
 });
