@@ -11,7 +11,7 @@ describe("renderTable", () => {
   it("renders 'No accounts found' when no reports or errors", () => {
     const output = renderTable([], []);
     expect(output).toContain("No accounts found");
-    expect(output).toContain("usage-opencode login");
+    expect(output).toContain("usage-google login");
   });
 
   it("renders header with column names", () => {
@@ -153,7 +153,7 @@ describe("renderTable", () => {
     ];
     const output = renderTable([], errors);
     expect(output).toContain("Action required:");
-    expect(output).toContain("usage-opencode login --mode gemini-cli --account user@example.com");
+    expect(output).toContain("usage-google login --mode gemini-cli --account user@example.com");
   });
 
   it("renders mixed reports and errors", () => {

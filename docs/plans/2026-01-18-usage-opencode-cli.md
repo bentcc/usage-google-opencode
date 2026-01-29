@@ -1,10 +1,10 @@
-# Usage-Opencode CLI Implementation Plan
+# Usage-Google-Opencode CLI Implementation Plan
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
 **Goal:** Build a standalone CLI that logs into Google OAuth (Antigravity + Gemini CLI as two distinct OAuth clients) and prints per-account model quota availability as remaining % plus reset time.
 
-**Architecture:** A Node.js + TypeScript CLI that stores account refresh tokens in `~/.config/opencode/usage-opencode-accounts.json`, refreshes access tokens on demand, calls Google Cloud Code internal endpoints to fetch available model quotas (`fetchAvailableModels` for antigravity, `retrieveUserQuota` for gemini-cli), and renders a table by default (with optional JSON output).
+**Architecture:** A Node.js + TypeScript CLI that stores account refresh tokens in `~/.config/opencode/usage-google-accounts.json`, refreshes access tokens on demand, calls Google Cloud Code internal endpoints to fetch available model quotas (`fetchAvailableModels` for antigravity, `retrieveUserQuota` for gemini-cli), and renders a table by default (with optional JSON output).
 
 **Tech Stack:** Node.js (>=20), TypeScript, Vitest, undici/fetch (built-in), `@openauthjs/openauth` (PKCE), minimal CLI arg parsing (or `commander`).
 
@@ -23,7 +23,7 @@ Completed tasks/commits:
 - Task 8 (login command): `089090b`
 - Task 9 (output formatting): `8887922`
 - Task 10 (E2E verification): Completed 2026-01-28
-  - Login tested: `usage-opencode login --mode both` ✓
+  - Login tested: `usage-google login --mode both` ✓
   - Status tested: antigravity + gemini-cli models visible ✓
   - Remaining % verified: All at 100% (reasonable) ✓
   - Reset times populated: e.g., "2026-01-30T10:55:08Z" ✓
@@ -43,7 +43,7 @@ Completed tasks/commits:
 - Default output: human-readable table
 - Storage:
   - Keep `~/.config/opencode/antigravity-accounts.json` untouched
-  - New file under same directory: `~/.config/opencode/usage-opencode-accounts.json`
+  - New file under same directory: `~/.config/opencode/usage-google-accounts.json`
 
 Non-goals (YAGNI for v1):
 - No GUI
@@ -65,11 +65,11 @@ Non-goals (YAGNI for v1):
 ## CLI UX Proposal
 
 Commands:
-- `usage-opencode login` (interactive)
+- `usage-google login` (interactive)
   - Ensures both identities are connected for an email.
   - Can support `--mode antigravity|gemini-cli|both` (default: both).
   - Gemini CLI requires a project ID: `--project <gcp-project-id>`.
-- `usage-opencode status`
+- `usage-google status`
   - Fetches quota for all stored accounts (both quota types if present).
   - Default output: table.
   - Options: `--format table|json`, `--only antigravity|gemini-cli`, `--account <email>`.
@@ -84,7 +84,7 @@ Exit codes:
 ## Data Model
 
 ### Storage file
-Path: `~/.config/opencode/usage-opencode-accounts.json`
+Path: `~/.config/opencode/usage-google-accounts.json`
 
 Schema (v1):
 ```json
@@ -95,7 +95,7 @@ Schema (v1):
       "email": "user@example.com",
       "projectId": "optional-legacy-shared-project",
       "antigravity": { "refreshToken": "..." },
-      "geminiCli": { "refreshToken": "...", "projectId": "my-gcp-project" },
+      "geminiCli": { "refreshToken": "...", "projectId": "my-gcp-projectID" },
       "addedAt": 0,
       "updatedAt": 0
     }
@@ -139,7 +139,7 @@ Two OAuth client configs:
 - Gemini CLI client id/secret
 
 Secrets handling (important):
-- Do NOT commit real client secrets into `usage-opencode/`.
+- Do NOT commit real client secrets into `usage-google-opencode/`.
 - Prefer loading client ids/secrets from env vars (e.g. `USAGE_OAUTH_ANTIGRAVITY_CLIENT_ID`, `USAGE_OAUTH_ANTIGRAVITY_CLIENT_SECRET`, `USAGE_OAUTH_GEMINI_CLI_CLIENT_ID`, `USAGE_OAUTH_GEMINI_CLI_CLIENT_SECRET`).
 - In code, keep placeholders only (current state in `src/oauth/constants.ts`).
 
@@ -208,7 +208,7 @@ describe("cli", () => {
   it("prints help for no args", async () => {
     const res = await runCli([]);
     expect(res.exitCode).toBe(0);
-    expect(res.stdout).toContain("usage-opencode");
+    expect(res.stdout).toContain("usage-google");
   });
 });
 ```
@@ -238,7 +238,7 @@ import { describe, it, expect } from "vitest";
 import { loadStore, upsertAccount } from "../storage";
 
 it("creates store with version 1 by default", async () => {
-  const store = await loadStore({ configDir: "/tmp/usage-opencode-test" });
+  const store = await loadStore({ configDir: "/tmp/usage-google-test" });
   expect(store.version).toBe(1);
   expect(store.accounts).toEqual([]);
 });
@@ -260,7 +260,7 @@ Expected: FAIL missing module / exports.
 
 **Step 3: Minimal implementation**
 - `getOpencodeConfigDir()` -> `~/.config/opencode` on mac/linux, `%APPDATA%/opencode` on windows.
-- `getUsageStorePath()` -> `<configDir>/usage-opencode-accounts.json`
+- `getUsageStorePath()` -> `<configDir>/usage-google-accounts.json`
 - `loadStore({configDir?})`, `saveStore(...)`, `upsertAccount(store, partial)`.
 
 **Step 4: Verify GREEN**
@@ -405,7 +405,7 @@ Run: `npm test`
 - Test: `src/__tests__/status.test.ts`
 
 Behavior:
-- Load accounts from `usage-opencode-accounts.json`.
+- Load accounts from `usage-google-accounts.json`.
 - For each account:
   - if antigravity refresh token exists -> refresh access token -> fetch quotas -> collect report
   - if gemini-cli refresh token exists -> refresh access token -> fetch quotas -> collect report
@@ -456,7 +456,7 @@ UX rules (non-technical friendly):
 - If refresh fails with `invalid_grant`, mark that identity as `Needs relogin` and keep processing other accounts.
 - If quota fetch fails with 403, mark as `Forbidden` (optional) and keep going.
 - Always print an "Action required" footer when any identity needs relogin, including the exact suggested command(s).
-  - Example: `usage-opencode login --mode gemini-cli --account user@example.com`
+  - Example: `usage-google login --mode gemini-cli --account user@example.com`
 - Only exit non-zero if *all* accounts/identities failed to produce any usable quota rows.
 
 ---
@@ -464,8 +464,8 @@ UX rules (non-technical friendly):
 ## Task 10: E2E sanity (manual)
 
 Manual verification steps:
-- `usage-opencode login --mode both`
-- `usage-opencode status`
+- `usage-google login --mode both`
+- `usage-google status`
 - Confirm:
   - two quota groups per email
   - remaining % looks reasonable
@@ -485,7 +485,7 @@ Manual verification steps:
 ## Security Notes
 
 - The storage file contains refresh tokens.
-- Add `usage-opencode-accounts.json` to a local `.gitignore` in the repo (not in `~/.config/...`).
+- Add `usage-google-accounts.json` to a local `.gitignore` in the repo (not in `~/.config/...`).
 - Never print refresh tokens in logs.
 
 ---

@@ -49,7 +49,7 @@ export function formatResetTime(resetTime: string): string {
  */
 export function renderTable(reports: AccountQuotaReport[], errors: IdentityError[]): string {
   if (reports.length === 0 && errors.length === 0) {
-    return "No accounts found. Run `usage-opencode login` to add an account.\n";
+    return "No accounts found. Run `usage-google login` to add an account.\n";
   }
 
   const lines: string[] = [];
@@ -100,7 +100,7 @@ export function renderTable(reports: AccountQuotaReport[], errors: IdentityError
     lines.push("");
     lines.push("Action required:");
     for (const err of needsRelogin) {
-      lines.push(`  usage-opencode login --mode ${err.identity} --account ${err.email}`);
+      lines.push(`  usage-google login --mode ${err.identity} --account ${err.email}`);
     }
   }
 

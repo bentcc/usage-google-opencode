@@ -34,30 +34,53 @@ export function getOpencodeConfigDir(): string {
   return path.join(os.homedir(), ".config", "opencode");
 }
 
+const STORE_FILENAME = "usage-google-accounts.json";
+const LEGACY_STORE_FILENAME = "usage-opencode-accounts.json";
+
 export function getUsageStorePath(opts?: { configDir?: string }): string {
   const configDir = opts?.configDir ?? getOpencodeConfigDir();
-  return path.join(configDir, "usage-opencode-accounts.json");
+  return path.join(configDir, STORE_FILENAME);
+}
+
+function getLegacyUsageStorePath(opts?: { configDir?: string }): string {
+  const configDir = opts?.configDir ?? getOpencodeConfigDir();
+  return path.join(configDir, LEGACY_STORE_FILENAME);
 }
 
 function emptyStore(): UsageOpencodeStore {
   return { version: 1, accounts: [] };
 }
 
-export async function loadStore(opts?: { configDir?: string }): Promise<UsageOpencodeStore> {
-  const storePath = getUsageStorePath(opts);
-
+async function readStoreFile(filePath: string): Promise<UsageOpencodeStore | undefined> {
   try {
-    const raw = await readFile(storePath, "utf8");
+    const raw = await readFile(filePath, "utf8");
     const parsed = JSON.parse(raw) as UsageOpencodeStore;
 
     if (parsed && parsed.version === 1 && Array.isArray(parsed.accounts)) {
       return parsed;
     }
 
-    return emptyStore();
+    return undefined;
   } catch {
-    return emptyStore();
+    return undefined;
   }
+}
+
+export async function loadStore(opts?: { configDir?: string }): Promise<UsageOpencodeStore> {
+  const storePath = getUsageStorePath(opts);
+  const legacyPath = getLegacyUsageStorePath(opts);
+
+  const current = await readStoreFile(storePath);
+  if (current) {
+    return current;
+  }
+
+  const legacy = await readStoreFile(legacyPath);
+  if (legacy) {
+    return legacy;
+  }
+
+  return emptyStore();
 }
 
 export async function saveStore(opts: { configDir?: string } | undefined, store: UsageOpencodeStore): Promise<void> {

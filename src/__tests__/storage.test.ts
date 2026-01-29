@@ -13,7 +13,7 @@ import {
 
 describe("storage", () => {
   it("creates store with version 1 by default", async () => {
-    const dir = await mkdtemp(join(tmpdir(), "usage-opencode-"));
+    const dir = await mkdtemp(join(tmpdir(), "usage-google-"));
     try {
       const store = await loadStore({ configDir: dir });
       expect(store.version).toBe(1);
@@ -45,7 +45,7 @@ describe("storage", () => {
   });
 
   it("saves and loads store", async () => {
-    const dir = await mkdtemp(join(tmpdir(), "usage-opencode-"));
+    const dir = await mkdtemp(join(tmpdir(), "usage-google-"));
     try {
       const store: UsageOpencodeStore = {
         version: 1,
@@ -72,7 +72,7 @@ describe("storage", () => {
   });
 
   it("loadStore tolerates invalid JSON by returning empty store", async () => {
-    const dir = await mkdtemp(join(tmpdir(), "usage-opencode-"));
+    const dir = await mkdtemp(join(tmpdir(), "usage-google-"));
     try {
       const path = getUsageStorePath({ configDir: dir });
       await writeFile(path, "{not valid json", "utf8");
@@ -80,6 +80,31 @@ describe("storage", () => {
       const store = await loadStore({ configDir: dir });
       expect(store.version).toBe(1);
       expect(store.accounts).toEqual([]);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("loads legacy usage-opencode-accounts.json when new file missing", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "usage-google-"));
+    try {
+      const legacyPath = join(dir, "usage-opencode-accounts.json");
+      const legacyStore: UsageOpencodeStore = {
+        version: 1,
+        accounts: [
+          {
+            email: "legacy@example.com",
+            antigravity: { refreshToken: "r1" },
+            addedAt: 1,
+            updatedAt: 2,
+          },
+        ],
+      };
+
+      await writeFile(legacyPath, JSON.stringify(legacyStore, null, 2), "utf8");
+
+      const loaded = await loadStore({ configDir: dir });
+      expect(loaded).toEqual(legacyStore);
     } finally {
       await rm(dir, { recursive: true, force: true });
     }

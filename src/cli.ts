@@ -8,7 +8,7 @@ export type CliResult = {
   stderr: string;
 };
 
-const HELP_TEXT = `usage-opencode - Check Google Cloud Code quota usage
+const HELP_TEXT = `usage-google - Check Google Cloud Code quota usage
 
 Commands:
   login     Connect a Google account (Antigravity and/or Gemini CLI)
@@ -25,12 +25,12 @@ Login Options:
   --project <id>       GCP project ID for gemini-cli quota (required for gemini-cli)
 
 Examples:
-  usage-opencode status
-  usage-opencode status --format json
-  usage-opencode status --only antigravity
-  usage-opencode login --mode both
-  usage-opencode login --mode gemini-cli --project my-gcp-project
-  usage-opencode login --mode both --project my-gcp-project
+  usage-google status
+  usage-google status --format json
+  usage-google status --only antigravity
+  usage-google login --mode both
+  usage-google login --mode gemini-cli --project my-gcp-projectID
+  usage-google login --mode both --project my-gcp-projectID
 `;
 
 function parseArgs(argv: string[]): {
@@ -170,8 +170,8 @@ export async function runCli(argv: string[]): Promise<CliResult> {
       return {
         exitCode: 1,
         stdout: "",
-        stderr: `Unknown command: ${args.command}\nRun 'usage-opencode --help' for usage.\n`,
-      };
+          stderr: `Unknown command: ${args.command}\nRun 'usage-google --help' for usage.\n`,
+        };
     }
   }
 }
