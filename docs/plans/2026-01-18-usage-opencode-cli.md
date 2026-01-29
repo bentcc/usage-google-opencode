@@ -456,6 +456,10 @@ Table columns (v1):
 - Reset time (HhMm; switches to XdYhZm when >= 24h)
 - Status (OK / Needs relogin / Error)
 
+Output layout:
+- Summary section (allowlist models)
+- Full detail section (all models)
+
 UX rules (non-technical friendly):
 - If refresh fails with `invalid_grant`, mark that identity as `Needs relogin` and keep processing other accounts.
 - If quota fetch fails with 403, mark as `Forbidden` (optional) and keep going.

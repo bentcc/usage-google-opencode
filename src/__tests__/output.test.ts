@@ -14,6 +14,25 @@ describe("renderTable", () => {
     expect(output).toContain("usage-google login");
   });
 
+  it("renders summary and full detail sections", () => {
+    const reports: AccountQuotaReport[] = [
+      {
+        email: "user@example.com",
+        identity: "antigravity",
+        projectId: "proj-1",
+        models: [
+          { model: "gemini-3-pro-high", remainingPercent: 85, resetTime: "2026-01-29T00:00:00Z" },
+          { model: "gemini-2.5-pro", remainingPercent: 50, resetTime: "2026-01-29T00:00:00Z" },
+        ],
+        fetchedAt: Date.now(),
+      },
+    ];
+
+    const output = renderTable(reports, []);
+    expect(output).toContain("Summary");
+    expect(output).toContain("Full detail");
+  });
+
   it("renders header with column names", () => {
     const reports: AccountQuotaReport[] = [
       {

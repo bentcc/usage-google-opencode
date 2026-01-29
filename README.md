@@ -81,6 +81,7 @@ usage-google status --only gemini-cli
 - Storage file: `~/.config/opencode/usage-google-accounts.json`
 - Default output is a table; use `--format json` for machine-readable output
 - Reset time is shown as `HhMm` and switches to `XdYhZm` when >= 24 hours
+- Output includes a Summary (allowlisted models) and Full detail section
 
 OAuth client credentials are stored in the same file under `oauthClients`:
 

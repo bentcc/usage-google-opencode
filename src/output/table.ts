@@ -58,6 +58,25 @@ export function renderTable(reports: AccountQuotaReport[], errors: IdentityError
     return "No accounts found. Run `usage-google login` to add an account.\n";
   }
 
+  const summaryAllowlist = [
+    "claude-opus-4.5-thinking",
+    "claude-sonnet-4.5",
+    "gemini-3-pro-high",
+    "gemini-3-pro-image",
+    "gemini-3-pro-preview",
+    "gemini-3-flash-preview",
+  ];
+  const orderedIdentities: Array<AccountQuotaReport["identity"]> = ["antigravity", "gemini-cli"];
+
+  const summaryReports: AccountQuotaReport[] = reports.map((report) => ({
+    ...report,
+    models: summaryAllowlist
+      .map((modelName) => report.models.find((model) => model.model === modelName))
+      .filter((model): model is { model: string; remainingPercent: number; resetTime: string } => Boolean(model)),
+  }));
+
+  const summaryHasData = summaryReports.some((report) => report.models.length > 0) || errors.length > 0;
+
   const emailWidth = 22;
   const identityWidth = 12;
   const remainingWidth = 10;
@@ -81,7 +100,84 @@ export function renderTable(reports: AccountQuotaReport[], errors: IdentityError
 
   const lines: string[] = [];
 
-  // Header
+  const renderHeader = (label: string) => {
+    lines.push(label);
+    lines.push("");
+    lines.push("┌" + "─".repeat(innerWidth) + "┐");
+    lines.push(
+      "│ " +
+        "Email".padEnd(emailWidth) +
+        " ".repeat(columnGap) +
+        "Identity".padEnd(identityWidth) +
+        " ".repeat(columnGap) +
+        "Model".padEnd(modelWidth) +
+        " ".repeat(columnGap) +
+        "Remaining".padEnd(remainingWidth) +
+        " ".repeat(columnGap) +
+        "Reset".padEnd(resetWidth) +
+        " ".repeat(columnGap) +
+        "Status".padEnd(statusWidth) +
+        "│"
+    );
+    lines.push("├" + "─".repeat(innerWidth) + "┤");
+  };
+
+  const renderRows = (rows: AccountQuotaReport[]) => {
+    for (const identity of orderedIdentities) {
+      for (const report of rows.filter((row) => row.identity === identity)) {
+        for (const model of report.models) {
+          const email = report.email.slice(0, emailWidth - 1).padEnd(emailWidth);
+          const identityLabel = report.identity.slice(0, identityWidth - 1).padEnd(identityWidth);
+          const modelName = model.model.padEnd(modelWidth);
+          const remaining = `${model.remainingPercent}%`.padEnd(remainingWidth);
+          const reset = model.resetTime ? formatResetTime(model.resetTime) : "-";
+          const resetCol = reset.padEnd(resetWidth);
+          const status = "OK";
+          lines.push(
+            `│ ${email}${" ".repeat(columnGap)}` +
+              `${identityLabel}${" ".repeat(columnGap)}` +
+              `${modelName}${" ".repeat(columnGap)}` +
+              `${remaining}${" ".repeat(columnGap)}` +
+              `${resetCol}${" ".repeat(columnGap)}` +
+              `${status.padEnd(statusWidth)}│`
+          );
+        }
+      }
+    }
+  };
+
+  const renderErrors = () => {
+    for (const err of errors) {
+      const email = err.email.slice(0, emailWidth - 1).padEnd(emailWidth);
+      const identity = err.identity.slice(0, identityWidth - 1).padEnd(identityWidth);
+      const modelCol = "-".padEnd(modelWidth);
+      const remainingCol = "-".padEnd(remainingWidth);
+      const resetCol = "-".padEnd(resetWidth);
+      const status = err.needsRelogin ? "Needs relogin" : (err.isForbidden ? "Forbidden" : "Error");
+      lines.push(
+        `│ ${email}${" ".repeat(columnGap)}` +
+          `${identity}${" ".repeat(columnGap)}` +
+          `${modelCol}${" ".repeat(columnGap)}` +
+          `${remainingCol}${" ".repeat(columnGap)}` +
+          `${resetCol}${" ".repeat(columnGap)}` +
+          `${status.padEnd(statusWidth)}│`
+      );
+    }
+  };
+
+  renderHeader("Summary");
+  if (summaryHasData) {
+    renderRows(summaryReports);
+    renderErrors();
+    lines.push("└" + "─".repeat(innerWidth) + "┘");
+  } else {
+    lines.push(`│ ${"(no matching models)".padEnd(contentWidth)}│`);
+    lines.push("└" + "─".repeat(innerWidth) + "┘");
+  }
+
+  lines.push("");
+  lines.push("Full detail");
+  lines.push("");
   lines.push("┌" + "─".repeat(innerWidth) + "┐");
   lines.push(
     "│ " +
@@ -99,46 +195,8 @@ export function renderTable(reports: AccountQuotaReport[], errors: IdentityError
       "│"
   );
   lines.push("├" + "─".repeat(innerWidth) + "┤");
-
-  // Data rows
-  for (const report of reports) {
-    for (const model of report.models) {
-      const email = report.email.slice(0, emailWidth - 1).padEnd(emailWidth);
-      const identity = report.identity.slice(0, identityWidth - 1).padEnd(identityWidth);
-      const modelName = model.model.padEnd(modelWidth);
-      const remaining = `${model.remainingPercent}%`.padEnd(remainingWidth);
-      const reset = model.resetTime ? formatResetTime(model.resetTime) : "-";
-      const resetCol = reset.padEnd(resetWidth);
-      const status = "OK";
-      lines.push(
-        `│ ${email}${" ".repeat(columnGap)}` +
-          `${identity}${" ".repeat(columnGap)}` +
-          `${modelName}${" ".repeat(columnGap)}` +
-          `${remaining}${" ".repeat(columnGap)}` +
-          `${resetCol}${" ".repeat(columnGap)}` +
-          `${status.padEnd(statusWidth)}│`
-      );
-    }
-  }
-
-  // Error rows
-  for (const err of errors) {
-    const email = err.email.slice(0, emailWidth - 1).padEnd(emailWidth);
-    const identity = err.identity.slice(0, identityWidth - 1).padEnd(identityWidth);
-    const modelCol = "-".padEnd(modelWidth);
-    const remainingCol = "-".padEnd(remainingWidth);
-    const resetCol = "-".padEnd(resetWidth);
-    const status = err.needsRelogin ? "Needs relogin" : (err.isForbidden ? "Forbidden" : "Error");
-    lines.push(
-      `│ ${email}${" ".repeat(columnGap)}` +
-        `${identity}${" ".repeat(columnGap)}` +
-        `${modelCol}${" ".repeat(columnGap)}` +
-        `${remainingCol}${" ".repeat(columnGap)}` +
-        `${resetCol}${" ".repeat(columnGap)}` +
-        `${status.padEnd(statusWidth)}│`
-    );
-  }
-
+  renderRows(reports);
+  renderErrors();
   lines.push("└" + "─".repeat(innerWidth) + "┘");
 
   // Footer with action required
