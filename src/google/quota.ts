@@ -3,7 +3,7 @@
  * Parses model quota information and filters to relevant models.
  */
 
-import type { QuotaIdentity } from "../oauth/constants";
+import type { QuotaIdentity } from "../oauth/constants.js";
 
 /**
  * Endpoints to try for fetchAvailableModels, in order.

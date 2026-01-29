@@ -3,14 +3,14 @@
  * Renders table by default, with optional JSON output.
  */
 
-import type { QuotaIdentity } from "../oauth/constants";
-import type { UsageOpencodeStore, UsageOpencodeAccount } from "../storage";
-import { loadStore as defaultLoadStore } from "../storage";
-import { refreshAccessToken as defaultRefreshAccessToken } from "../oauth/token";
-import { ensureProjectId as defaultEnsureProjectId } from "../google/project";
-import { fetchQuota as defaultFetchQuota, type ModelQuota } from "../google/quota";
-import { renderTable } from "../output/table";
-import { renderJson } from "../output/json";
+import type { OAuthClientConfig, QuotaIdentity } from "../oauth/constants.js";
+import type { UsageOpencodeStore, UsageOpencodeAccount } from "../storage.js";
+import { loadStore as defaultLoadStore } from "../storage.js";
+import { refreshAccessToken as defaultRefreshAccessToken } from "../oauth/token.js";
+import { ensureProjectId as defaultEnsureProjectId } from "../google/project.js";
+import { fetchQuota as defaultFetchQuota, type ModelQuota } from "../google/quota.js";
+import { renderTable } from "../output/table.js";
+import { renderJson } from "../output/json.js";
 
 /**
  * Quota report for a single account + identity combination.
@@ -52,6 +52,7 @@ export interface StatusDeps {
   refreshAccessToken: (input: {
     identity: QuotaIdentity;
     refreshToken: string;
+    oauthClient?: OAuthClientConfig;
     fetchImpl?: (input: string | URL, init?: RequestInit) => Promise<Response>;
   }) => Promise<{ accessToken: string; expiresAt: number }>;
   ensureProjectId: (input: {
@@ -117,13 +118,15 @@ async function fetchIdentityQuota(
   account: UsageOpencodeAccount,
   identity: QuotaIdentity,
   identityData: { refreshToken: string; projectId?: string },
-  deps: StatusDeps
+  deps: StatusDeps,
+  oauthClient?: OAuthClientConfig,
 ): Promise<{ report?: AccountQuotaReport; error?: IdentityError }> {
   try {
     // Refresh access token
     const { accessToken } = await deps.refreshAccessToken({
       identity,
       refreshToken: identityData.refreshToken,
+      oauthClient,
     });
 
     // Get identity-specific project ID, falling back to account-level (legacy)
@@ -190,11 +193,13 @@ export async function runStatus(options: StatusOptions = {}): Promise<StatusResu
     // Process antigravity identity
     if (account.antigravity?.refreshToken) {
       if (!options.identityFilter || options.identityFilter === "antigravity") {
+        const oauthClient = store.oauthClients?.antigravity;
         const result = await fetchIdentityQuota(
           account,
           "antigravity",
           account.antigravity,
-          deps
+          deps,
+          oauthClient,
         );
         if (result.report) reports.push(result.report);
         if (result.error) errors.push(result.error);
@@ -204,11 +209,13 @@ export async function runStatus(options: StatusOptions = {}): Promise<StatusResu
     // Process gemini-cli identity
     if (account.geminiCli?.refreshToken) {
       if (!options.identityFilter || options.identityFilter === "gemini-cli") {
+        const oauthClient = store.oauthClients?.["gemini-cli"];
         const result = await fetchIdentityQuota(
           account,
           "gemini-cli",
           account.geminiCli,
-          deps
+          deps,
+          oauthClient,
         );
         if (result.report) reports.push(result.report);
         if (result.error) errors.push(result.error);

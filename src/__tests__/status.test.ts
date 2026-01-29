@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
-import { runStatus, type StatusDeps, type AccountQuotaReport } from "../commands/status";
-import type { UsageOpencodeStore } from "../storage";
+import { runStatus, type StatusDeps, type AccountQuotaReport } from "../commands/status.js";
+import type { UsageOpencodeStore } from "../storage.js";
 
 describe("status command", () => {
   const mockStore: UsageOpencodeStore = {
@@ -48,6 +48,43 @@ describe("status command", () => {
     expect(result.reports[0].identity).toBe("antigravity");
     expect(result.reports[0].email).toBe("user@example.com");
     expect(result.reports[1].identity).toBe("gemini-cli");
+  });
+
+  it("passes oauth clients from store to refreshAccessToken", async () => {
+    const storeWithOauth: UsageOpencodeStore = {
+      version: 1,
+      oauthClients: {
+        antigravity: { clientId: "ag-id", clientSecret: "ag-secret" },
+        "gemini-cli": { clientId: "gc-id", clientSecret: "gc-secret" },
+      },
+      accounts: [
+        {
+          email: "user@example.com",
+          projectId: "test-project",
+          antigravity: { refreshToken: "antigravity-refresh" },
+          geminiCli: { refreshToken: "gemini-refresh" },
+          addedAt: 0,
+          updatedAt: 0,
+        },
+      ],
+    };
+    const deps = createMockDeps();
+    deps.loadStore = vi.fn().mockResolvedValue(storeWithOauth);
+
+    await runStatus({ deps });
+
+    expect(deps.refreshAccessToken).toHaveBeenCalledWith(
+      expect.objectContaining({
+        identity: "antigravity",
+        oauthClient: { clientId: "ag-id", clientSecret: "ag-secret" },
+      }),
+    );
+    expect(deps.refreshAccessToken).toHaveBeenCalledWith(
+      expect.objectContaining({
+        identity: "gemini-cli",
+        oauthClient: { clientId: "gc-id", clientSecret: "gc-secret" },
+      }),
+    );
   });
 
   it("renders table output by default", async () => {

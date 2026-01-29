@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { runCli } from "../cli";
+import { runCli } from "../cli.js";
 
 describe("cli", () => {
   it("prints help for no args", async () => {

@@ -18,6 +18,24 @@ npm install
 npm run build
 ```
 
+## Global install (npm link)
+
+Link for global usage:
+
+```bash
+npm install
+npm run build
+npm link
+```
+
+Remove the global link:
+
+```bash
+npm unlink -g usage-google-opencode
+# or, from this repo:
+npm unlink
+```
+
 ## Usage
 
 Login (Antigravity only):
@@ -62,6 +80,22 @@ usage-google status --only gemini-cli
   `gcloud config get-value project`
 - Storage file: `~/.config/opencode/usage-google-accounts.json`
 - Default output is a table; use `--format json` for machine-readable output
+- Reset time is shown as `HhMm` and switches to `XdYhZm` when >= 24 hours
+
+OAuth client credentials are stored in the same file under `oauthClients`:
+
+```json
+{
+  "version": 1,
+  "oauthClients": {
+    "antigravity": { "clientId": "...", "clientSecret": "..." },
+    "gemini-cli": { "clientId": "...", "clientSecret": "..." }
+  },
+  "accounts": []
+}
+```
+
+Keep this file private — it contains both refresh tokens and client secrets.
 
 ## Development
 

@@ -90,6 +90,10 @@ Schema (v1):
 ```json
 {
   "version": 1,
+  "oauthClients": {
+    "antigravity": { "clientId": "...", "clientSecret": "..." },
+    "gemini-cli": { "clientId": "...", "clientSecret": "..." }
+  },
   "accounts": [
     {
       "email": "user@example.com",
@@ -449,7 +453,7 @@ Table columns (v1):
 - Identity (`antigravity` / `gemini-cli`)
 - Model
 - Remaining %
-- Reset time
+- Reset time (HhMm; switches to XdYhZm when >= 24h)
 - Status (OK / Needs relogin / Error)
 
 UX rules (non-technical friendly):

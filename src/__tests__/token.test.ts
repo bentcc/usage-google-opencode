@@ -1,6 +1,6 @@
 import { it, expect } from "vitest";
 
-import { exchangeCode, refreshAccessToken } from "../oauth/token";
+import { exchangeCode, refreshAccessToken } from "../oauth/token.js";
 
 it("exchanges code via oauth2.googleapis.com/token", async () => {
   const calls: any[] = [];
@@ -68,4 +68,76 @@ it("refreshes access token and does not require refresh_token in response", asyn
   const body = String(calls[0].init.body);
   expect(body).toContain("grant_type=refresh_token");
   expect(body).toContain("refresh_token=rt");
+});
+
+it("uses oauth client override when provided", async () => {
+  const calls: any[] = [];
+  const fakeFetch = async (url: any, init: any) => {
+    calls.push({ url: String(url), init });
+    return new Response(
+      JSON.stringify({
+        access_token: "a",
+        expires_in: 3600,
+        refresh_token: "r",
+      }),
+      { status: 200 },
+    );
+  };
+
+  await exchangeCode({
+    identity: "antigravity",
+    code: "c",
+    verifier: "v",
+    redirectUri: "http://localhost:1234/callback",
+    oauthClient: { clientId: "override-id", clientSecret: "override-secret" },
+    fetchImpl: fakeFetch as any,
+  });
+
+  const body = String(calls[0].init.body);
+  expect(body).toContain("client_id=override-id");
+  expect(body).toContain("client_secret=override-secret");
+});
+
+it("uses env overrides for oauth client credentials", async () => {
+  const envKeys = [
+    "USAGE_OAUTH_ANTIGRAVITY_CLIENT_ID",
+    "USAGE_OAUTH_ANTIGRAVITY_CLIENT_SECRET",
+  ];
+  const prev: Record<string, string | undefined> = {};
+  for (const key of envKeys) prev[key] = process.env[key];
+
+  try {
+    process.env.USAGE_OAUTH_ANTIGRAVITY_CLIENT_ID = "env-client-id";
+    process.env.USAGE_OAUTH_ANTIGRAVITY_CLIENT_SECRET = "env-client-secret";
+
+    const calls: any[] = [];
+    const fakeFetch = async (url: any, init: any) => {
+      calls.push({ url: String(url), init });
+      return new Response(
+        JSON.stringify({
+          access_token: "a",
+          expires_in: 3600,
+          refresh_token: "r",
+        }),
+        { status: 200 },
+      );
+    };
+
+    await exchangeCode({
+      identity: "antigravity",
+      code: "c",
+      verifier: "v",
+      redirectUri: "http://localhost:1234/callback",
+      fetchImpl: fakeFetch as any,
+    });
+
+    const body = String(calls[0].init.body);
+    expect(body).toContain("client_id=env-client-id");
+    expect(body).toContain("client_secret=env-client-secret");
+  } finally {
+    for (const key of envKeys) {
+      if (prev[key] === undefined) delete process.env[key];
+      else process.env[key] = prev[key];
+    }
+  }
 });

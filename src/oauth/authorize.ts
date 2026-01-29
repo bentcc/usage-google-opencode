@@ -4,9 +4,10 @@ import {
   DEFAULT_REDIRECT_URI,
   GOOGLE_OAUTH_AUTHORIZATION_ENDPOINT,
   GOOGLE_OAUTH_SCOPES,
-  OAUTH_CLIENTS,
+  getOAuthClient,
+  type OAuthClientConfig,
   type QuotaIdentity,
-} from "./constants";
+} from "./constants.js";
 
 type PkcePair = {
   challenge: string;
@@ -16,9 +17,10 @@ type PkcePair = {
 export async function buildAuthorizationUrl(input: {
   identity: QuotaIdentity;
   redirectUri?: string;
+  oauthClient?: OAuthClientConfig;
 }): Promise<{ url: string; verifier: string }> {
   const pkce = (await generatePKCE()) as PkcePair;
-  const client = OAUTH_CLIENTS[input.identity];
+  const client = getOAuthClient(input.identity, input.oauthClient);
 
   const url = new URL(GOOGLE_OAUTH_AUTHORIZATION_ENDPOINT);
   url.searchParams.set("client_id", client.clientId);

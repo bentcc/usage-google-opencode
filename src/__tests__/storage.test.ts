@@ -9,7 +9,7 @@ import {
   saveStore,
   upsertAccount,
   type UsageOpencodeStore,
-} from "../storage";
+} from "../storage.js";
 
 describe("storage", () => {
   it("creates store with version 1 by default", async () => {
@@ -49,6 +49,9 @@ describe("storage", () => {
     try {
       const store: UsageOpencodeStore = {
         version: 1,
+        oauthClients: {
+          antigravity: { clientId: "client-id", clientSecret: "client-secret" },
+        },
         accounts: [
           {
             email: "user@example.com",

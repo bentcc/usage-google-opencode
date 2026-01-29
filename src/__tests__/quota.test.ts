@@ -5,7 +5,7 @@ import {
   fetchQuota,
   QuotaError,
   FETCH_AVAILABLE_MODELS_ENDPOINTS,
-} from "../google/quota";
+} from "../google/quota.js";
 
 interface FakeCall {
   url: string;

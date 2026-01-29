@@ -1,6 +1,6 @@
 export type QuotaIdentity = "antigravity" | "gemini-cli";
 
-type OAuthClientConfig = {
+export type OAuthClientConfig = {
   clientId: string;
   clientSecret: string;
 };
@@ -27,3 +27,33 @@ export const OAUTH_CLIENTS: Record<QuotaIdentity, OAuthClientConfig> = {
     clientSecret: "GEMINI_CLI_CLIENT_SECRET_PLACEHOLDER",
   },
 };
+
+const OAUTH_ENV_VARS: Record<QuotaIdentity, { clientId: string; clientSecret: string }> = {
+  antigravity: {
+    clientId: "USAGE_OAUTH_ANTIGRAVITY_CLIENT_ID",
+    clientSecret: "USAGE_OAUTH_ANTIGRAVITY_CLIENT_SECRET",
+  },
+  "gemini-cli": {
+    clientId: "USAGE_OAUTH_GEMINI_CLI_CLIENT_ID",
+    clientSecret: "USAGE_OAUTH_GEMINI_CLI_CLIENT_SECRET",
+  },
+};
+
+export function getOAuthClient(
+  identity: QuotaIdentity,
+  override?: OAuthClientConfig,
+): OAuthClientConfig {
+  const envKeys = OAUTH_ENV_VARS[identity];
+  const envClientId = process.env[envKeys.clientId];
+  const envClientSecret = process.env[envKeys.clientSecret];
+
+  const overrideClientId = override?.clientId?.trim();
+  const overrideClientSecret = override?.clientSecret?.trim();
+
+  return {
+    clientId:
+      overrideClientId ?? envClientId ?? OAUTH_CLIENTS[identity].clientId,
+    clientSecret:
+      overrideClientSecret ?? envClientSecret ?? OAUTH_CLIENTS[identity].clientSecret,
+  };
+}

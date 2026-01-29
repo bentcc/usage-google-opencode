@@ -4,7 +4,7 @@ import {
   ensureProjectId,
   LOAD_CODE_ASSIST_ENDPOINTS,
   DEFAULT_PROJECT_ID,
-} from "../google/project";
+} from "../google/project.js";
 
 interface FakeCall {
   url: string;

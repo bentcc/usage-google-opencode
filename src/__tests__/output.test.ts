@@ -3,9 +3,9 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { renderTable, formatResetTime } from "../output/table";
-import { renderJson } from "../output/json";
-import type { AccountQuotaReport, IdentityError } from "../commands/status";
+import { renderTable, formatResetTime } from "../output/table.js";
+import { renderJson } from "../output/json.js";
+import type { AccountQuotaReport, IdentityError } from "../commands/status.js";
 
 describe("renderTable", () => {
   it("renders 'No accounts found' when no reports or errors", () => {
@@ -193,8 +193,15 @@ describe("renderTable", () => {
       },
     ];
     const output = renderTable(reports, []);
-    // Table is 90 chars wide, should not exceed that
-    expect(output.split("\n").every((line) => line.length <= 92)).toBe(true);
+    expect(output).toContain("verylongemailaddress1");
+    expect(output).not.toContain("verylongemailaddress1234567890@example.com");
+    const lines = output.trimEnd().split("\n");
+    const borderLengths = new Set(
+      lines.filter((line) => line.startsWith("┌") || line.startsWith("└") || line.startsWith("├")).map((line) => line.length)
+    );
+    const rowLengths = new Set(lines.filter((line) => line.startsWith("│")).map((line) => line.length));
+    expect(borderLengths.size).toBe(1);
+    expect(rowLengths.size).toBe(1);
   });
 });
 
@@ -208,6 +215,12 @@ describe("formatResetTime", () => {
     const futureTime = new Date(Date.now() + 2 * 60 * 60 * 1000 + 30 * 60 * 1000).toISOString();
     const result = formatResetTime(futureTime);
     expect(result).toMatch(/^\d+h\d+m$/);
+  });
+
+  it("formats days when duration is at least 24 hours", () => {
+    const futureTime = new Date(Date.now() + 26 * 60 * 60 * 1000 + 5 * 60 * 1000).toISOString();
+    const result = formatResetTime(futureTime);
+    expect(result).toMatch(/^\d+d\d+h\d+m$/);
   });
 
   it("formats only minutes when less than 1 hour", () => {

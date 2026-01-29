@@ -1,6 +1,6 @@
-import { runStatus, type OutputFormat } from "./commands/status";
-import { runLogin, type LoginMode } from "./commands/login";
-import type { QuotaIdentity } from "./oauth/constants";
+import { runStatus, type OutputFormat } from "./commands/status.js";
+import { runLogin, type LoginMode } from "./commands/login.js";
+import type { QuotaIdentity } from "./oauth/constants.js";
 
 export type CliResult = {
   exitCode: number;

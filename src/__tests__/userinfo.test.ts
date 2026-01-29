@@ -1,6 +1,6 @@
 import { it, expect, describe } from "vitest";
 
-import { fetchUserEmail, UserInfoError } from "../google/userinfo";
+import { fetchUserEmail, UserInfoError } from "../google/userinfo.js";
 
 interface FakeCall {
   url: string;

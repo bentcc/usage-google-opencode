@@ -3,7 +3,7 @@
  * Renders structured JSON output for programmatic consumption.
  */
 
-import type { AccountQuotaReport, IdentityError } from "../commands/status";
+import type { AccountQuotaReport, IdentityError } from "../commands/status.js";
 
 /**
  * JSON output structure.

@@ -3,7 +3,7 @@
  * Renders a human-readable table with quota information.
  */
 
-import type { AccountQuotaReport, IdentityError } from "../commands/status";
+import type { AccountQuotaReport, IdentityError } from "../commands/status.js";
 
 /**
  * Formats reset time for table display.
@@ -22,9 +22,15 @@ export function formatResetTime(resetTime: string): string {
 
     if (diffMs < 0) return "now";
 
-    const hours = Math.floor(diffMs / (1000 * 60 * 60));
-    const mins = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+    const totalMinutes = Math.floor(diffMs / (1000 * 60));
+    const hours = Math.floor(totalMinutes / 60);
+    const mins = totalMinutes % 60;
 
+    if (hours >= 24) {
+      const days = Math.floor(hours / 24);
+      const remHours = hours % 24;
+      return `${days}d${remHours}h${mins}m`;
+    }
     if (hours > 0) return `${hours}h${mins}m`;
     return `${mins}m`;
   } catch {
@@ -52,47 +58,88 @@ export function renderTable(reports: AccountQuotaReport[], errors: IdentityError
     return "No accounts found. Run `usage-google login` to add an account.\n";
   }
 
+  const emailWidth = 22;
+  const identityWidth = 12;
+  const remainingWidth = 10;
+  const statusWidth = 16;
+  const resetValues = reports
+    .flatMap((report) => report.models.map((model) => formatResetTime(model.resetTime)))
+    .concat(errors.map(() => "-"));
+  const resetWidth = Math.max(8, ...resetValues.map((value) => value.length));
+  const modelValues = reports.flatMap((report) => report.models.map((model) => model.model));
+  const modelWidth = Math.max(18, "-".length, ...modelValues.map((value) => value.length));
+  const columnGap = 2;
+  const contentWidth =
+    emailWidth +
+    identityWidth +
+    modelWidth +
+    remainingWidth +
+    resetWidth +
+    statusWidth +
+    columnGap * 5;
+  const innerWidth = contentWidth + 2;
+
   const lines: string[] = [];
 
-  // Header (total width 90 chars including borders)
-  lines.push("┌" + "─".repeat(88) + "┐");
+  // Header
+  lines.push("┌" + "─".repeat(innerWidth) + "┐");
   lines.push(
     "│ " +
-      "Email".padEnd(22) +
-      "Identity".padEnd(12) +
-      "Model".padEnd(18) +
-      "Remaining".padEnd(10) +
-      "Reset".padEnd(8) +
-      "Status".padEnd(16) +
+      "Email".padEnd(emailWidth) +
+      " ".repeat(columnGap) +
+      "Identity".padEnd(identityWidth) +
+      " ".repeat(columnGap) +
+      "Model".padEnd(modelWidth) +
+      " ".repeat(columnGap) +
+      "Remaining".padEnd(remainingWidth) +
+      " ".repeat(columnGap) +
+      "Reset".padEnd(resetWidth) +
+      " ".repeat(columnGap) +
+      "Status".padEnd(statusWidth) +
       "│"
   );
-  lines.push("├" + "─".repeat(88) + "┤");
+  lines.push("├" + "─".repeat(innerWidth) + "┤");
 
   // Data rows
   for (const report of reports) {
     for (const model of report.models) {
-      const email = report.email.slice(0, 21).padEnd(22);
-      const identity = report.identity.slice(0, 11).padEnd(12);
-      const modelName = model.model.slice(0, 17).padEnd(18);
-      const remaining = `${model.remainingPercent}%`.padEnd(10);
+      const email = report.email.slice(0, emailWidth - 1).padEnd(emailWidth);
+      const identity = report.identity.slice(0, identityWidth - 1).padEnd(identityWidth);
+      const modelName = model.model.padEnd(modelWidth);
+      const remaining = `${model.remainingPercent}%`.padEnd(remainingWidth);
       const reset = model.resetTime ? formatResetTime(model.resetTime) : "-";
+      const resetCol = reset.padEnd(resetWidth);
       const status = "OK";
-      lines.push(`│ ${email}${identity}${modelName}${remaining}${reset.slice(0, 7).padEnd(8)}${status.padEnd(16)}│`);
+      lines.push(
+        `│ ${email}${" ".repeat(columnGap)}` +
+          `${identity}${" ".repeat(columnGap)}` +
+          `${modelName}${" ".repeat(columnGap)}` +
+          `${remaining}${" ".repeat(columnGap)}` +
+          `${resetCol}${" ".repeat(columnGap)}` +
+          `${status.padEnd(statusWidth)}│`
+      );
     }
   }
 
   // Error rows
   for (const err of errors) {
-    const email = err.email.slice(0, 21).padEnd(22);
-    const identity = err.identity.slice(0, 11).padEnd(12);
-    const modelCol = "-".padEnd(18);
-    const remainingCol = "-".padEnd(10);
-    const resetCol = "-".padEnd(8);
+    const email = err.email.slice(0, emailWidth - 1).padEnd(emailWidth);
+    const identity = err.identity.slice(0, identityWidth - 1).padEnd(identityWidth);
+    const modelCol = "-".padEnd(modelWidth);
+    const remainingCol = "-".padEnd(remainingWidth);
+    const resetCol = "-".padEnd(resetWidth);
     const status = err.needsRelogin ? "Needs relogin" : (err.isForbidden ? "Forbidden" : "Error");
-    lines.push(`│ ${email}${identity}${modelCol}${remainingCol}${resetCol}${status.padEnd(16)}│`);
+    lines.push(
+      `│ ${email}${" ".repeat(columnGap)}` +
+        `${identity}${" ".repeat(columnGap)}` +
+        `${modelCol}${" ".repeat(columnGap)}` +
+        `${remainingCol}${" ".repeat(columnGap)}` +
+        `${resetCol}${" ".repeat(columnGap)}` +
+        `${status.padEnd(statusWidth)}│`
+    );
   }
 
-  lines.push("└" + "─".repeat(88) + "┘");
+  lines.push("└" + "─".repeat(innerWidth) + "┘");
 
   // Footer with action required
   const needsRelogin = errors.filter((e) => e.needsRelogin);
