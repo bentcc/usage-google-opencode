@@ -5,7 +5,6 @@ import {
   GOOGLE_OAUTH_AUTHORIZATION_ENDPOINT,
   GOOGLE_OAUTH_SCOPES,
   getOAuthClient,
-  type OAuthClientConfig,
   type QuotaIdentity,
 } from "./constants.js";
 
@@ -17,10 +16,9 @@ type PkcePair = {
 export async function buildAuthorizationUrl(input: {
   identity: QuotaIdentity;
   redirectUri?: string;
-  oauthClient?: OAuthClientConfig;
 }): Promise<{ url: string; verifier: string }> {
   const pkce = (await generatePKCE()) as PkcePair;
-  const client = getOAuthClient(input.identity, input.oauthClient);
+  const client = getOAuthClient(input.identity);
 
   const url = new URL(GOOGLE_OAUTH_AUTHORIZATION_ENDPOINT);
   url.searchParams.set("client_id", client.clientId);

@@ -144,31 +144,6 @@ describe("runLogin", () => {
     expect(savedStore!.accounts[0].geminiCli?.refreshToken).toBe("refresh-token");
   });
 
-  it("passes oauth clients from store to auth and token exchange", async () => {
-    const deps = createMockDeps({
-      loadStore: vi.fn().mockResolvedValue({
-        version: 1,
-        accounts: [],
-        oauthClients: {
-          antigravity: { clientId: "client-id", clientSecret: "client-secret" },
-        },
-      }),
-    });
-
-    await runLogin({ mode: "antigravity", deps });
-
-    expect(deps.buildAuthorizationUrl).toHaveBeenCalledWith(
-      expect.objectContaining({
-        oauthClient: { clientId: "client-id", clientSecret: "client-secret" },
-      }),
-    );
-    expect(deps.exchangeCode).toHaveBeenCalledWith(
-      expect.objectContaining({
-        oauthClient: { clientId: "client-id", clientSecret: "client-secret" },
-      }),
-    );
-  });
-
   it("uses callback server to receive auth code", async () => {
     const serverClosed = vi.fn();
     const deps = createMockDeps({

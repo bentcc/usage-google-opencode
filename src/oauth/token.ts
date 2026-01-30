@@ -1,4 +1,4 @@
-import { getOAuthClient, type OAuthClientConfig, type QuotaIdentity } from "./constants.js";
+import { getOAuthClient, type QuotaIdentity } from "./constants.js";
 
 export const GOOGLE_OAUTH_TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token";
 
@@ -83,11 +83,10 @@ export async function exchangeCode(input: {
   code: string;
   verifier: string;
   redirectUri: string;
-  oauthClient?: OAuthClientConfig;
   fetchImpl?: FetchLike;
 }): Promise<{ accessToken: string; refreshToken: string; expiresAt: number }> {
   const fetchImpl = input.fetchImpl ?? fetch;
-  const client = getOAuthClient(input.identity, input.oauthClient);
+  const client = getOAuthClient(input.identity);
 
   const json = await postToken({
     fetchImpl,
@@ -128,11 +127,10 @@ export async function exchangeCode(input: {
 export async function refreshAccessToken(input: {
   identity: QuotaIdentity;
   refreshToken: string;
-  oauthClient?: OAuthClientConfig;
   fetchImpl?: FetchLike;
 }): Promise<{ accessToken: string; expiresAt: number }> {
   const fetchImpl = input.fetchImpl ?? fetch;
-  const client = getOAuthClient(input.identity, input.oauthClient);
+  const client = getOAuthClient(input.identity);
 
   const json = await postToken({
     fetchImpl,

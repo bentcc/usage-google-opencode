@@ -6,6 +6,9 @@
   "bin": {
     "usage-google": "dist/index.js"
   },
+  "files": [
+    "dist"
+  ],
   "engines": {
     "node": ">=20"
   },

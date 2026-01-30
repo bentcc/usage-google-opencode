@@ -17,43 +17,24 @@ export const GOOGLE_OAUTH_SCOPES = [
   "https://www.googleapis.com/auth/userinfo.profile",
 ] as const;
 
+/**
+ * OAuth Client Credentials for Google Cloud Code Assist
+ * 
+ * These are the official client credentials extracted from:
+ * - Antigravity Login (IDE Quota): Uses credentials from the Antigravity IDE
+ * - Gemini CLI Login (Developer/GCloud Quota): Uses credentials from the Google Cloud SDK / Gemini CLI
+ */
 export const OAUTH_CLIENTS: Record<QuotaIdentity, OAuthClientConfig> = {
   antigravity: {
-    clientId: "ANTIGRAVITY_CLIENT_ID_PLACEHOLDER",
-    clientSecret: "ANTIGRAVITY_CLIENT_SECRET_PLACEHOLDER",
+    clientId: "1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com",
+    clientSecret: "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",
   },
   "gemini-cli": {
-    clientId: "GEMINI_CLI_CLIENT_ID_PLACEHOLDER",
-    clientSecret: "GEMINI_CLI_CLIENT_SECRET_PLACEHOLDER",
+    clientId: "681255809395-oo8ft2oprdrnp9e3aqf6av3hmdib135j.apps.googleusercontent.com",
+    clientSecret: "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",
   },
 };
 
-const OAUTH_ENV_VARS: Record<QuotaIdentity, { clientId: string; clientSecret: string }> = {
-  antigravity: {
-    clientId: "USAGE_OAUTH_ANTIGRAVITY_CLIENT_ID",
-    clientSecret: "USAGE_OAUTH_ANTIGRAVITY_CLIENT_SECRET",
-  },
-  "gemini-cli": {
-    clientId: "USAGE_OAUTH_GEMINI_CLI_CLIENT_ID",
-    clientSecret: "USAGE_OAUTH_GEMINI_CLI_CLIENT_SECRET",
-  },
-};
-
-export function getOAuthClient(
-  identity: QuotaIdentity,
-  override?: OAuthClientConfig,
-): OAuthClientConfig {
-  const envKeys = OAUTH_ENV_VARS[identity];
-  const envClientId = process.env[envKeys.clientId];
-  const envClientSecret = process.env[envKeys.clientSecret];
-
-  const overrideClientId = override?.clientId?.trim();
-  const overrideClientSecret = override?.clientSecret?.trim();
-
-  return {
-    clientId:
-      overrideClientId ?? envClientId ?? OAUTH_CLIENTS[identity].clientId,
-    clientSecret:
-      overrideClientSecret ?? envClientSecret ?? OAUTH_CLIENTS[identity].clientSecret,
-  };
+export function getOAuthClient(identity: QuotaIdentity): OAuthClientConfig {
+  return OAUTH_CLIENTS[identity];
 }

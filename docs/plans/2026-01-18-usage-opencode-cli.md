@@ -90,10 +90,6 @@ Schema (v1):
 ```json
 {
   "version": 1,
-  "oauthClients": {
-    "antigravity": { "clientId": "...", "clientSecret": "..." },
-    "gemini-cli": { "clientId": "...", "clientSecret": "..." }
-  },
   "accounts": [
     {
       "email": "user@example.com",
@@ -138,14 +134,17 @@ export interface AccountQuotaReport {
 
 ## Google/OAuth Details
 
-Two OAuth client configs:
-- Antigravity client id/secret
-- Gemini CLI client id/secret
+OAuth client credentials are hardcoded in `src/oauth/constants.ts`:
 
-Secrets handling (important):
-- Do NOT commit real client secrets into `usage-google-opencode/`.
-- Prefer loading client ids/secrets from env vars (e.g. `USAGE_OAUTH_ANTIGRAVITY_CLIENT_ID`, `USAGE_OAUTH_ANTIGRAVITY_CLIENT_SECRET`, `USAGE_OAUTH_GEMINI_CLI_CLIENT_ID`, `USAGE_OAUTH_GEMINI_CLI_CLIENT_SECRET`).
-- In code, keep placeholders only (current state in `src/oauth/constants.ts`).
+**Antigravity Login (IDE Quota):**
+- Client ID: `1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com`
+- Client Secret: `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`
+
+**Gemini CLI Login (Developer/GCloud Quota):**
+- Client ID: `681255809395-oo8ft2oprdrnp9e3aqf6av3hmdib135j.apps.googleusercontent.com`
+- Client Secret: `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`
+
+These credentials are extracted from the official Google Cloud SDK and Antigravity IDE.
 
 OAuth flow (both identities):
 - Authorization URL: `https://accounts.google.com/o/oauth2/v2/auth`

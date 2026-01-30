@@ -49,9 +49,6 @@ describe("storage", () => {
     try {
       const store: UsageOpencodeStore = {
         version: 1,
-        oauthClients: {
-          antigravity: { clientId: "client-id", clientSecret: "client-secret" },
-        },
         accounts: [
           {
             email: "user@example.com",

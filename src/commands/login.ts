@@ -6,7 +6,7 @@
 import http from "node:http";
 import { spawn } from "node:child_process";
 
-import type { OAuthClientConfig, QuotaIdentity } from "../oauth/constants.js";
+import type { QuotaIdentity } from "../oauth/constants.js";
 import type { UsageOpencodeStore } from "../storage.js";
 import {
   loadStore as defaultLoadStore,
@@ -31,14 +31,12 @@ export interface LoginDeps {
   buildAuthorizationUrl: (input: {
     identity: QuotaIdentity;
     redirectUri?: string;
-    oauthClient?: OAuthClientConfig;
   }) => Promise<{ url: string; verifier: string }>;
   exchangeCode: (input: {
     identity: QuotaIdentity;
     code: string;
     verifier: string;
     redirectUri: string;
-    oauthClient?: OAuthClientConfig;
     fetchImpl?: (input: string | URL, init?: RequestInit) => Promise<Response>;
   }) => Promise<{ accessToken: string; refreshToken: string; expiresAt: number }>;
   fetchUserEmail: (input: {
@@ -298,7 +296,6 @@ async function defaultPrompt(message: string): Promise<string> {
 async function loginIdentity(
   identity: QuotaIdentity,
   deps: LoginDeps,
-  oauthClient?: OAuthClientConfig,
 ): Promise<{ email: string; refreshToken: string } | { error: string }> {
   deps.log(`\nLogging in with ${identity}...`);
 
@@ -317,7 +314,6 @@ async function loginIdentity(
     const { url, verifier } = await deps.buildAuthorizationUrl({
       identity,
       redirectUri,
-      oauthClient,
     });
 
     deps.log(`Opening browser for authentication...`);
@@ -353,7 +349,6 @@ async function loginIdentity(
         code,
         verifier,
         redirectUri,
-        oauthClient,
       });
       accessToken = tokenResult.accessToken;
       refreshToken = tokenResult.refreshToken;
@@ -400,8 +395,7 @@ export async function runLogin(options: LoginOptions): Promise<LoginResult> {
   let lastError: string | undefined;
 
   for (const identity of identities) {
-    const oauthClient = store.oauthClients?.[identity];
-    const result = await loginIdentity(identity, deps, oauthClient);
+    const result = await loginIdentity(identity, deps);
 
     if ("error" in result) {
       lastError = result.error;

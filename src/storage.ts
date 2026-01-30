@@ -2,11 +2,8 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-import type { OAuthClientConfig, QuotaIdentity } from "./oauth/constants.js";
-
 export type UsageOpencodeStore = {
   version: 1;
-  oauthClients?: Partial<Record<QuotaIdentity, OAuthClientConfig>>;
   accounts: UsageOpencodeAccount[];
 };
 

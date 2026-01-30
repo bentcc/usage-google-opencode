@@ -3,7 +3,7 @@
  * Renders table by default, with optional JSON output.
  */
 
-import type { OAuthClientConfig, QuotaIdentity } from "../oauth/constants.js";
+import type { QuotaIdentity } from "../oauth/constants.js";
 import type { UsageOpencodeStore, UsageOpencodeAccount } from "../storage.js";
 import { loadStore as defaultLoadStore } from "../storage.js";
 import { refreshAccessToken as defaultRefreshAccessToken } from "../oauth/token.js";
@@ -52,7 +52,6 @@ export interface StatusDeps {
   refreshAccessToken: (input: {
     identity: QuotaIdentity;
     refreshToken: string;
-    oauthClient?: OAuthClientConfig;
     fetchImpl?: (input: string | URL, init?: RequestInit) => Promise<Response>;
   }) => Promise<{ accessToken: string; expiresAt: number }>;
   ensureProjectId: (input: {
@@ -119,14 +118,12 @@ async function fetchIdentityQuota(
   identity: QuotaIdentity,
   identityData: { refreshToken: string; projectId?: string },
   deps: StatusDeps,
-  oauthClient?: OAuthClientConfig,
 ): Promise<{ report?: AccountQuotaReport; error?: IdentityError }> {
   try {
     // Refresh access token
     const { accessToken } = await deps.refreshAccessToken({
       identity,
       refreshToken: identityData.refreshToken,
-      oauthClient,
     });
 
     // Get identity-specific project ID, falling back to account-level (legacy)
@@ -193,18 +190,16 @@ export async function runStatus(options: StatusOptions = {}): Promise<StatusResu
   for (const account of accounts) {
     if (account.antigravity?.refreshToken) {
       if (!options.identityFilter || options.identityFilter === "antigravity") {
-        const oauthClient = store.oauthClients?.antigravity;
         tasks.push(
-          fetchIdentityQuota(account, "antigravity", account.antigravity, deps, oauthClient),
+          fetchIdentityQuota(account, "antigravity", account.antigravity, deps),
         );
       }
     }
 
     if (account.geminiCli?.refreshToken) {
       if (!options.identityFilter || options.identityFilter === "gemini-cli") {
-        const oauthClient = store.oauthClients?.["gemini-cli"];
         tasks.push(
-          fetchIdentityQuota(account, "gemini-cli", account.geminiCli, deps, oauthClient),
+          fetchIdentityQuota(account, "gemini-cli", account.geminiCli, deps),
         );
       }
     }
