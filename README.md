@@ -244,18 +244,6 @@ node dist/index.js status
 
 ---
 
-## 🤝 Contributing
-
-This project was developed with AI assistance. Contributions are welcome!
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes with tests
-4. Run `npm test` and `npm run typecheck`
-5. Submit a pull request
-
----
-
 ## 📄 License
 
 MIT License - See LICENSE file for details
