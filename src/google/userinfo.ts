@@ -49,6 +49,15 @@ export async function fetchUserEmail(input: {
   accessToken: string;
   fetchImpl?: FetchLike;
 }): Promise<string> {
+  // Validate access token
+  if (!input.accessToken || input.accessToken.trim().length === 0) {
+    throw new UserInfoError({
+      message: "Access token is required and cannot be empty",
+      status: 0,
+      endpoint: GOOGLE_USERINFO_ENDPOINT,
+    });
+  }
+
   const fetchImpl = input.fetchImpl ?? fetch;
 
   const url = `${GOOGLE_USERINFO_ENDPOINT}?alt=json`;
@@ -69,9 +78,19 @@ export async function fetchUserEmail(input: {
     });
   }
 
-  if (!json?.email || typeof json.email !== "string") {
+  if (!json?.email || typeof json.email !== "string" || json.email.trim().length === 0) {
     throw new UserInfoError({
-      message: "User info response missing email",
+      message: "User info response missing or invalid email",
+      status: 200,
+      endpoint: GOOGLE_USERINFO_ENDPOINT,
+    });
+  }
+
+  // Basic email format validation
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(json.email)) {
+    throw new UserInfoError({
+      message: "User info response contains invalid email format",
       status: 200,
       endpoint: GOOGLE_USERINFO_ENDPOINT,
     });

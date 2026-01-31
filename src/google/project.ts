@@ -3,6 +3,9 @@
  * Used when no project ID is stored for an account.
  */
 
+// Fetch timeout in milliseconds (10 seconds per endpoint)
+const FETCH_TIMEOUT_MS = 10000;
+
 /**
  * Endpoints to try for loadCodeAssist, in order.
  * Production endpoint is most reliable for project resolution.
@@ -80,6 +83,34 @@ async function readJsonSafe(res: Response): Promise<LoadCodeAssistResponse | und
 }
 
 /**
+ * Wraps fetch with a timeout to prevent hanging on slow networks.
+ */
+async function fetchWithTimeout(
+  fetchImpl: FetchLike,
+  url: string,
+  init: RequestInit,
+  timeoutMs: number
+): Promise<Response> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await fetchImpl(url, {
+      ...init,
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+    return response;
+  } catch (err) {
+    clearTimeout(timeoutId);
+    if (err instanceof Error && err.name === "AbortError") {
+      throw new Error(`Network request timed out after ${timeoutMs}ms`);
+    }
+    throw err;
+  }
+}
+
+/**
  * Request headers for loadCodeAssist to match the working implementation.
  */
 function buildHeaders(accessToken: string): Record<string, string> {
@@ -106,9 +137,25 @@ export async function ensureProjectId(input: {
   projectId?: string;
   fetchImpl?: FetchLike;
 }): Promise<string> {
-  // If projectId already provided, return it without API call
+  // Validate access token
+  if (!input.accessToken || input.accessToken.trim().length === 0) {
+    throw new ProjectError({
+      message: "Access token is required and cannot be empty",
+      status: 0,
+      endpoint: "",
+    });
+  }
+
+  // If projectId already provided, validate and return it
   if (input.projectId) {
-    return input.projectId;
+    if (input.projectId.trim().length === 0) {
+      throw new ProjectError({
+        message: "Project ID cannot be empty",
+        status: 0,
+        endpoint: "",
+      });
+    }
+    return input.projectId.trim();
   }
 
   const fetchImpl = input.fetchImpl ?? fetch;
@@ -124,11 +171,11 @@ export async function ensureProjectId(input: {
   // Try each endpoint in order
   for (const endpoint of LOAD_CODE_ASSIST_ENDPOINTS) {
     try {
-      const res = await fetchImpl(endpoint, {
+      const res = await fetchWithTimeout(fetchImpl, endpoint, {
         method: "POST",
         headers,
         body,
-      });
+      }, FETCH_TIMEOUT_MS);
 
       if (!res.ok) {
         // Try next endpoint on failure

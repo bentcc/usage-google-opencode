@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile, rename } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
@@ -23,10 +23,11 @@ export type UsageOpencodeAccount = {
 
 export function getOpencodeConfigDir(): string {
   if (process.platform === "win32") {
-    const appdata = process.env.APPDATA;
+    const appdata = process.env.APPDATA || process.env.LOCALAPPDATA;
     if (!appdata) {
-      // Fall back to a reasonable default rather than throwing in tests.
-      return path.join(os.homedir(), "AppData", "Roaming", "opencode");
+      // Last resort fallback
+      const userProfile = process.env.USERPROFILE || os.homedir();
+      return path.join(userProfile, "AppData", "Roaming", "opencode");
     }
     return path.join(appdata, "opencode");
   }
@@ -60,8 +61,11 @@ async function readStoreFile(filePath: string): Promise<UsageOpencodeStore | und
       return parsed;
     }
 
+    // Log corruption but don't throw
+    console.error(`Warning: Storage file corrupted at ${filePath}`);
     return undefined;
   } catch {
+    // File doesn't exist or is unreadable - this is fine
     return undefined;
   }
 }
@@ -70,13 +74,19 @@ export async function loadStore(opts?: { configDir?: string }): Promise<UsageOpe
   const storePath = getUsageStorePath(opts);
   const legacyPath = getLegacyUsageStorePath(opts);
 
-  const current = await readStoreFile(storePath);
+  // Try both in parallel for better performance
+  const [current, legacy] = await Promise.all([
+    readStoreFile(storePath),
+    readStoreFile(legacyPath)
+  ]);
+  
   if (current) {
     return current;
   }
-
-  const legacy = await readStoreFile(legacyPath);
+  
   if (legacy) {
+    // Migrate legacy file to new location
+    await saveStore(opts, legacy);
     return legacy;
   }
 
@@ -86,7 +96,16 @@ export async function loadStore(opts?: { configDir?: string }): Promise<UsageOpe
 export async function saveStore(opts: { configDir?: string } | undefined, store: UsageOpencodeStore): Promise<void> {
   const storePath = getUsageStorePath(opts);
   await mkdir(path.dirname(storePath), { recursive: true });
-  await writeFile(storePath, JSON.stringify(store, null, 2) + "\n", "utf8");
+  
+  // Write to temporary file first for atomic operation
+  const tempPath = `${storePath}.tmp`;
+  await writeFile(tempPath, JSON.stringify(store, null, 2) + "\n", {
+    encoding: "utf8",
+    mode: 0o600  // Only owner can read/write
+  });
+  
+  // Atomic rename to final location
+  await rename(tempPath, storePath);
 }
 
 export function upsertAccount(

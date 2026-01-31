@@ -1,7 +1,7 @@
 {
   "name": "usage-google-opencode",
-  "version": "0.0.0",
-  "private": true,
+  "version": "1.0.0",
+  "private": false,
   "type": "module",
   "bin": {
     "usage-google": "dist/index.js"

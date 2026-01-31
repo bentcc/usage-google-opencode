@@ -103,10 +103,18 @@ export interface LoginResult {
 
 /**
  * Parses the authorization code from a callback URL.
+ * Validates that the URL is from localhost for security.
  */
 export function parseCallbackCode(url: string): string | undefined {
   try {
     const parsed = new URL(url);
+    
+    // Validate it's a localhost callback for security
+    if (parsed.hostname !== "localhost" && parsed.hostname !== "127.0.0.1") {
+      console.error("Invalid callback URL: must be from localhost");
+      return undefined;
+    }
+    
     return parsed.searchParams.get("code") ?? undefined;
   } catch {
     return undefined;
@@ -203,7 +211,7 @@ async function defaultStartCallbackServer(): Promise<CallbackServer> {
 
       // Set up timeout for callback
       const timeout = setTimeout(() => {
-        callbackReject(new Error("timeout"));
+        callbackReject(new Error("Login timed out after 2 minutes. Please try again."));
       }, 120000); // 2 minute timeout
 
       resolve({

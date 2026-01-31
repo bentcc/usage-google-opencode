@@ -5,6 +5,9 @@
 
 import type { QuotaIdentity } from "../oauth/constants.js";
 
+// Fetch timeout in milliseconds (10 seconds per endpoint)
+const FETCH_TIMEOUT_MS = 10000;
+
 /**
  * Endpoints to try for fetchAvailableModels, in order.
  */
@@ -171,6 +174,34 @@ async function readJsonSafe(res: Response): Promise<unknown> {
 }
 
 /**
+ * Wraps fetch with a timeout to prevent hanging on slow networks.
+ */
+async function fetchWithTimeout(
+  fetchImpl: FetchLike,
+  url: string,
+  init: RequestInit,
+  timeoutMs: number
+): Promise<Response> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await fetchImpl(url, {
+      ...init,
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+    return response;
+  } catch (err) {
+    clearTimeout(timeoutId);
+    if (err instanceof Error && err.name === "AbortError") {
+      throw new Error(`Network request timed out after ${timeoutMs}ms`);
+    }
+    throw err;
+  }
+}
+
+/**
  * Fetches quota information from the Google Cloud Code API.
  *
  * @param input.accessToken - Valid OAuth access token
@@ -186,6 +217,23 @@ export async function fetchQuota(input: {
   identity?: QuotaIdentity;
   fetchImpl?: FetchLike;
 }): Promise<ModelQuota[]> {
+  // Validate inputs
+  if (!input.accessToken || input.accessToken.trim().length === 0) {
+    throw new QuotaError({
+      message: "Access token is required and cannot be empty",
+      status: 0,
+      endpoint: "",
+    });
+  }
+  
+  if (!input.projectId || input.projectId.trim().length === 0) {
+    throw new QuotaError({
+      message: "Project ID is required and cannot be empty",
+      status: 0,
+      endpoint: "",
+    });
+  }
+
   const fetchImpl = input.fetchImpl ?? fetch;
   const identity = input.identity ?? "antigravity";
   
@@ -202,14 +250,16 @@ export async function fetchQuota(input: {
     ? RETRIEVE_USER_QUOTA_ENDPOINTS
     : FETCH_AVAILABLE_MODELS_ENDPOINTS;
 
+  let lastError: Error | undefined;
+
   // Try each endpoint in order
   for (const endpoint of endpoints) {
     try {
-      const res = await fetchImpl(endpoint, {
+      const res = await fetchWithTimeout(fetchImpl, endpoint, {
         method: "POST",
         headers,
         body,
-      });
+      }, FETCH_TIMEOUT_MS);
 
       if (!res.ok) {
         // 403 should be thrown immediately - it's a real permission error
@@ -244,6 +294,8 @@ export async function fetchQuota(input: {
 
       return parseQuotaResponse(models);
     } catch (err) {
+      lastError = err instanceof Error ? err : new Error(String(err));
+      
       // Re-throw QuotaError (including 403)
       if (err instanceof QuotaError) {
         throw err;
@@ -253,7 +305,15 @@ export async function fetchQuota(input: {
     }
   }
 
-  // All endpoints failed
+  // All endpoints failed - provide helpful error
+  if (lastError) {
+    throw new QuotaError({
+      message: `Network error: ${lastError.message}`,
+      status: 0,
+      endpoint: endpoints[0],
+    });
+  }
+
   throw new QuotaError({
     message: "All quota endpoints failed",
     status: 0,
