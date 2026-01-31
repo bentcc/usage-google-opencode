@@ -136,15 +136,11 @@ export interface AccountQuotaReport {
 
 OAuth client credentials are hardcoded in `src/oauth/constants.ts`:
 
-**Antigravity Login (IDE Quota):**
-- Client ID: `1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com`
-- Client Secret: `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`
-
-**Gemini CLI Login (Developer/GCloud Quota):**
-- Client ID: `681255809395-oo8ft2oprdrnp9e3aqf6av3hmdib135j.apps.googleusercontent.com`
-- Client Secret: `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`
-
 These credentials are extracted from the official Google Cloud SDK and Antigravity IDE.
+- **Antigravity Login** - for IDE Quota tracking
+- **Gemini CLI Login** - for Developer/GCloud Quota tracking
+
+> **Note**: Actual credential values are in `src/oauth/constants.ts`. These are public OAuth client credentials (standard practice) and pose no security risk.
 
 OAuth flow (both identities):
 - Authorization URL: `https://accounts.google.com/o/oauth2/v2/auth`

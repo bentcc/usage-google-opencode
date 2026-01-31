@@ -93,17 +93,11 @@ First production-ready release of usage-google-opencode CLI tool for monitoring 
 
 ### OAuth Clients
 
-The following OAuth credentials are hardcoded by design (extracted from official sources):
+OAuth client credentials are hardcoded in `src/oauth/constants.ts` by design. These are public client credentials extracted from:
+- **Antigravity IDE** - for IDE quota tracking
+- **Google Cloud SDK / Gemini CLI** - for CLI quota tracking
 
-**Antigravity (IDE Quota):**
-- Client ID: `1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com`
-- Client Secret: `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`
-
-**Gemini CLI (CLI Quota):**
-- Client ID: `681255809395-oo8ft2oprdrnp9e3aqf6av3hmdib135j.apps.googleusercontent.com`
-- Client Secret: `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`
-
-These are public client credentials and pose no security risk.
+> **Note**: These credentials are intentionally public (standard for OAuth public clients) and pose no security risk. They are necessary for the tool to authenticate with Google's OAuth servers. See `src/oauth/constants.ts` for the actual credential values.
 
 ### API Endpoints
 
@@ -178,4 +172,4 @@ This is the first production release. If you were using development versions:
 
 ---
 
-[1.0.0]: https://github.com/YOUR_USERNAME/usage-google-opencode/releases/tag/v1.0.0
+[1.0.0]: https://github.com/bentcc/usage-google-opencode/releases/tag/v1.0.0
