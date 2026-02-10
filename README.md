@@ -146,7 +146,7 @@ Summary
 ┌────────────────────────────────────────────────────────────────────────────────────────────────────┐
 │ Email                  Identity      Model                      Remaining  Reset      Status        │
 ├────────────────────────────────────────────────────────────────────────────────────────────────────┤
-│ user@example.com       antigravity   claude-opus-4-5-thinking   100%       2h30m      OK            │
+│ user@example.com       antigravity   claude-opus-4-6-thinking   100%       2h30m      OK            │
 │ user@example.com       antigravity   gemini-3-pro-high          95%        2h30m      OK            │
 │ user@example.com       gemini-cli    gemini-3-pro-preview       100%       23h45m     OK            │
 └────────────────────────────────────────────────────────────────────────────────────────────────────┘
