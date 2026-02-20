@@ -57,7 +57,7 @@ npm link
 bun install
 bun run build
 bun pm pack
-bun install -g "$(pwd)/usage-google-opencode-1.0.0.tgz"
+bun install -g "$(pwd)/usage-google-opencode-1.2.0.tgz"
 ```
 
 Make sure `~/.bun/bin` is in your PATH:
