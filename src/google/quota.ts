@@ -21,13 +21,11 @@ export const FETCH_AVAILABLE_MODELS_ENDPOINTS = [
 ] as const;
 
 /**
- * Endpoints to try for retrieveUserQuota (gemini-cli identity), in order.
+ * Production endpoint for retrieveUserQuota (gemini-cli identity).
+ * The real gemini-cli only uses the prod endpoint, no sandbox fallback.
  */
-export const RETRIEVE_USER_QUOTA_ENDPOINTS = [
-  "https://cloudcode-pa.googleapis.com/v1internal:retrieveUserQuota",
-  "https://daily-cloudcode-pa.sandbox.googleapis.com/v1internal:retrieveUserQuota",
-  "https://autopush-cloudcode-pa.sandbox.googleapis.com/v1internal:retrieveUserQuota",
-] as const;
+export const RETRIEVE_USER_QUOTA_ENDPOINT =
+  "https://cloudcode-pa.googleapis.com/v1internal:retrieveUserQuota";
 
 type FetchLike = (input: string | URL, init?: RequestInit) => Promise<Response>;
 
@@ -72,11 +70,14 @@ export interface FetchAvailableModelsResponse {
 
 /**
  * Raw API response structure from retrieveUserQuota.
+ * Matches gemini-cli's BucketInfo type from code_assist/types.ts.
  */
 export interface RetrieveUserQuotaResponse {
   buckets?: Array<{
+    remainingAmount?: string;
     remainingFraction?: number;
     resetTime?: string;
+    tokenType?: string;
     modelId?: string;
   }>;
 }
@@ -112,28 +113,30 @@ function buildAntigravityUserAgent(): string {
 }
 
 /**
- * Headers for Antigravity identity (IDE mode).
- * Matches the working Antigravity-Manager: only Authorization, Content-Type, User-Agent.
- * No X-Goog-Api-Client or Client-Metadata headers.
+ * Known Gemini CLI version and model for User-Agent construction.
+ * The real gemini-cli builds User-Agent as: GeminiCLI/<version>/<model> (<platform>; <arch>)
+ * Reference: gemini-cli/packages/core/src/core/contentGenerator.ts
  */
-const ANTIGRAVITY_HEADERS = {
-  "User-Agent": buildAntigravityUserAgent(),
-} as const;
+const KNOWN_GEMINI_CLI_VERSION = "1.0.0";
+const KNOWN_GEMINI_CLI_MODEL = "gemini-2.5-pro";
 
 /**
- * Headers for Gemini CLI identity (CLI mode).
+ * Builds a User-Agent string matching the official Gemini CLI format.
+ * The API validates User-Agent; this matches the real gemini-cli behavior.
+ * No X-Goog-Api-Client or Client-Metadata headers are used by the real CLI.
  */
-const GEMINI_CLI_HEADERS = {
-  "User-Agent": "google-api-nodejs-client/9.15.1",
-  "X-Goog-Api-Client": "gl-node/22.17.0",
-  "Client-Metadata": "ideType=IDE_UNSPECIFIED,platform=PLATFORM_UNSPECIFIED,pluginType=GEMINI",
-} as const;
+function buildGeminiCliUserAgent(): string {
+  return `GeminiCLI/${KNOWN_GEMINI_CLI_VERSION}/${KNOWN_GEMINI_CLI_MODEL} (${process.platform}; ${process.arch})`;
+}
 
 /**
  * Gets the appropriate headers for an identity.
  */
 function getHeadersForIdentity(identity: QuotaIdentity): Record<string, string> {
-  return identity === "antigravity" ? { ...ANTIGRAVITY_HEADERS } : { ...GEMINI_CLI_HEADERS };
+  if (identity === "antigravity") {
+    return { "User-Agent": buildAntigravityUserAgent() };
+  }
+  return { "User-Agent": buildGeminiCliUserAgent() };
 }
 
 /**
@@ -239,15 +242,16 @@ function delay(ms: number): Promise<void> {
 /**
  * Fetches quota information from the Google Cloud Code API.
  *
- * For antigravity identity: uses prod endpoint with retry logic (up to 3 attempts).
- * For gemini-cli identity: tries multiple endpoints sequentially.
+ * For antigravity identity: uses prod fetchAvailableModels endpoint with retry logic.
+ * For gemini-cli identity: uses prod retrieveUserQuota endpoint with retry logic.
+ * Both use up to 3 retry attempts with 1s delay between, matching Antigravity-Manager behavior.
  *
  * @param input.accessToken - Valid OAuth access token
  * @param input.projectId - Google Cloud project ID
  * @param input.identity - The quota identity (antigravity or gemini-cli)
  * @param input.fetchImpl - Optional fetch implementation for testing
  * @returns Array of ModelQuota for relevant models
- * @throws {QuotaError} If all attempts/endpoints fail with HTTP errors
+ * @throws {QuotaError} If all retry attempts fail with HTTP errors
  */
 export async function fetchQuota(input: {
   accessToken: string;
@@ -286,7 +290,7 @@ export async function fetchQuota(input: {
   const isGeminiCli = identity === "gemini-cli";
 
   if (isGeminiCli) {
-    return fetchQuotaWithEndpointFallback(fetchImpl, RETRIEVE_USER_QUOTA_ENDPOINTS, headers, body, true);
+    return fetchQuotaWithRetry(fetchImpl, RETRIEVE_USER_QUOTA_ENDPOINT, headers, body, true);
   }
 
   // Antigravity: use prod endpoint with retry logic (matching Antigravity-Manager)
@@ -296,12 +300,14 @@ export async function fetchQuota(input: {
 /**
  * Fetches quota from a single endpoint with retry logic.
  * Matches Antigravity-Manager's retry behavior: up to MAX_RETRIES attempts with RETRY_DELAY_MS between.
+ * Used for both antigravity (fetchAvailableModels) and gemini-cli (retrieveUserQuota) identities.
  */
 async function fetchQuotaWithRetry(
   fetchImpl: FetchLike,
   endpoint: string,
   headers: Record<string, string>,
   body: string,
+  isGeminiCli = false,
 ): Promise<ModelQuota[]> {
   let lastError: Error | undefined;
 
@@ -340,6 +346,14 @@ async function fetchQuotaWithRetry(
         return [];
       }
 
+      if (isGeminiCli) {
+        const quota = json as RetrieveUserQuotaResponse;
+        if (!quota.buckets) {
+          return [];
+        }
+        return parseUserQuotaResponse(quota);
+      }
+
       const models = json as FetchAvailableModelsResponse;
       if (!models.models) {
         return [];
@@ -370,76 +384,3 @@ async function fetchQuotaWithRetry(
   });
 }
 
-/**
- * Fetches quota by trying multiple endpoints sequentially (used for gemini-cli).
- */
-async function fetchQuotaWithEndpointFallback(
-  fetchImpl: FetchLike,
-  endpoints: readonly string[],
-  headers: Record<string, string>,
-  body: string,
-  isGeminiCli: boolean,
-): Promise<ModelQuota[]> {
-  let lastError: Error | undefined;
-
-  for (const endpoint of endpoints) {
-    try {
-      const res = await fetchWithTimeout(fetchImpl, endpoint, {
-        method: "POST",
-        headers,
-        body,
-      }, FETCH_TIMEOUT_MS);
-
-      if (!res.ok) {
-        if (res.status === 403) {
-          throw new QuotaError({
-            message: `Forbidden: HTTP 403`,
-            status: 403,
-            endpoint,
-          });
-        }
-        continue;
-      }
-
-      const json = await readJsonSafe(res);
-      if (!json) {
-        return [];
-      }
-
-      if (isGeminiCli) {
-        const quota = json as RetrieveUserQuotaResponse;
-        if (!quota.buckets) {
-          return [];
-        }
-        return parseUserQuotaResponse(quota);
-      }
-
-      const models = json as FetchAvailableModelsResponse;
-      if (!models.models) {
-        return [];
-      }
-
-      return parseQuotaResponse(models);
-    } catch (err) {
-      lastError = err instanceof Error ? err : new Error(String(err));
-      if (err instanceof QuotaError) {
-        throw err;
-      }
-      continue;
-    }
-  }
-
-  if (lastError) {
-    throw new QuotaError({
-      message: `Network error: ${lastError.message}`,
-      status: 0,
-      endpoint: endpoints[0],
-    });
-  }
-
-  throw new QuotaError({
-    message: "All quota endpoints failed",
-    status: 0,
-    endpoint: endpoints[0],
-  });
-}

@@ -160,15 +160,19 @@ Implementation choices:
 
 ## Quota Fetch Details
 
+> **Updated 2026-02-20:** Gemini CLI quota now uses only the prod endpoint with retry logic (matching antigravity), not sandbox fallback. User-Agent updated to `GeminiCLI/<ver>/<model> (<platform>; <arch>)` per real gemini-cli source. See CHANGELOG.md v1.2.0.
+
 Primary endpoint (antigravity):
 - `POST https://cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels`
 - Body: `{ "project": "<projectId>" }`
 - Auth: `Authorization: Bearer <access token>`
+- Strategy: Retry up to 3 times with 1s delay; 403 throws immediately
 
 Primary endpoint (gemini-cli):
 - `POST https://cloudcode-pa.googleapis.com/v1internal:retrieveUserQuota`
 - Body: `{ "project": "<projectId>" }`
 - Auth: `Authorization: Bearer <access token>`
+- Strategy: Retry up to 3 times with 1s delay; 403 throws immediately
 
 Project ID resolution (if missing):
 - `POST https://cloudcode-pa.googleapis.com/v1internal:loadCodeAssist`
@@ -176,7 +180,7 @@ Project ID resolution (if missing):
 
 Parsing:
 - `fetchAvailableModels` returns `models: Record<string, { quotaInfo?: { remainingFraction?: number; resetTime?: string } }>`
-- `retrieveUserQuota` returns `buckets: Array<{ modelId?: string; remainingFraction?: number; resetTime?: string }>`
+- `retrieveUserQuota` returns `buckets: Array<{ modelId?: string; remainingFraction?: number; remainingAmount?: string; resetTime?: string; tokenType?: string }>`
 - Convert `remainingFraction` to percent: `Math.floor(remainingFraction * 100)`
 - Keep `resetTime` as string
 

@@ -5,6 +5,7 @@ import {
   fetchQuota,
   QuotaError,
   FETCH_AVAILABLE_MODELS_ENDPOINTS,
+  RETRIEVE_USER_QUOTA_ENDPOINT,
 } from "../google/quota.js";
 
 interface FakeCall {
@@ -214,9 +215,9 @@ describe("fetchQuota", () => {
     expect(headers["Client-Metadata"]).toBeUndefined();
   });
 
-  it("includes identity-specific headers for gemini-cli", async () => {
+  it("includes GeminiCLI-style User-Agent for gemini-cli (no X-Goog-Api-Client or Client-Metadata)", async () => {
     // Arrange
-    const apiResponse = { models: {} };
+    const apiResponse = { buckets: [] };
     const { fetch: fakeFetch, calls } = createFakeFetch(apiResponse);
 
     // Act
@@ -227,18 +228,23 @@ describe("fetchQuota", () => {
       fetchImpl: fakeFetch,
     });
 
-    // Assert - verify gemini-cli headers
+    // Assert - verify GeminiCLI-style User-Agent matching real gemini-cli
     const headers = calls[0].init.headers as Record<string, string>;
-    expect(headers["User-Agent"]).toContain("google-api-nodejs-client");
-    expect(headers["X-Goog-Api-Client"]).toContain("gl-node");
+    expect(headers["User-Agent"]).toContain("GeminiCLI/");
+    expect(headers["User-Agent"]).toContain(process.platform);
+    expect(headers["User-Agent"]).toContain(process.arch);
+    // Should NOT have X-Goog-Api-Client or Client-Metadata (real CLI doesn't use these)
+    expect(headers["X-Goog-Api-Client"]).toBeUndefined();
+    expect(headers["Client-Metadata"]).toBeUndefined();
   });
 
-  it("uses retrieveUserQuota for gemini-cli and parses bucket models", async () => {
+  it("uses retrieveUserQuota prod endpoint for gemini-cli and parses bucket models", async () => {
     // Arrange
     const apiResponse = {
       buckets: [
         {
           modelId: "gemini-2.5-flash",
+          remainingAmount: "500",
           remainingFraction: 0.5,
           resetTime: "2026-01-30T10:52:51Z",
         },
@@ -254,9 +260,9 @@ describe("fetchQuota", () => {
       fetchImpl: fakeFetch,
     });
 
-    // Assert - endpoint should be retrieveUserQuota
+    // Assert - endpoint should be the prod retrieveUserQuota endpoint
     expect(calls).toHaveLength(1);
-    expect(calls[0].url).toContain("retrieveUserQuota");
+    expect(calls[0].url).toBe(RETRIEVE_USER_QUOTA_ENDPOINT);
 
     // Assert - parsed result from buckets
     expect(result).toEqual([
@@ -315,6 +321,65 @@ describe("fetchQuota", () => {
         accessToken: "test-token",
         projectId: "my-project",
         identity: "antigravity",
+        fetchImpl: fakeFetch as typeof fetch,
+      }),
+    ).rejects.toThrow("Forbidden");
+
+    // Should only have made 1 call (no retries for 403)
+    expect(calls).toHaveLength(1);
+  });
+
+  it("retries on non-403 HTTP errors for gemini-cli identity", async () => {
+    // Arrange - first two calls return 500, third returns success
+    let callCount = 0;
+    const calls: FakeCall[] = [];
+    const fakeFetch = async (url: string | URL, init?: RequestInit) => {
+      calls.push({ url: String(url), init: init ?? {} });
+      callCount++;
+      if (callCount <= 2) {
+        return new Response("Server error", { status: 500 });
+      }
+      return new Response(JSON.stringify({
+        buckets: [
+          {
+            modelId: "gemini-2.5-flash",
+            remainingAmount: "800",
+            remainingFraction: 0.8,
+            resetTime: "2026-02-01T00:00:00Z",
+          },
+        ],
+      }), { status: 200 });
+    };
+
+    // Act
+    const result = await fetchQuota({
+      accessToken: "test-token",
+      projectId: "my-project",
+      identity: "gemini-cli",
+      fetchImpl: fakeFetch as typeof fetch,
+    });
+
+    // Assert - retried and eventually succeeded, all hits same prod endpoint
+    expect(calls).toHaveLength(3);
+    expect(calls.every((c) => c.url === RETRIEVE_USER_QUOTA_ENDPOINT)).toBe(true);
+    expect(result).toHaveLength(1);
+    expect(result[0].model).toBe("gemini-2.5-flash");
+  });
+
+  it("does not retry on 403 for gemini-cli identity", async () => {
+    // Arrange
+    const calls: FakeCall[] = [];
+    const fakeFetch = async (url: string | URL, init?: RequestInit) => {
+      calls.push({ url: String(url), init: init ?? {} });
+      return new Response(JSON.stringify({ error: "forbidden" }), { status: 403 });
+    };
+
+    // Act & Assert - 403 throws immediately, no retry
+    await expect(
+      fetchQuota({
+        accessToken: "test-token",
+        projectId: "my-project",
+        identity: "gemini-cli",
         fetchImpl: fakeFetch as typeof fetch,
       }),
     ).rejects.toThrow("Forbidden");

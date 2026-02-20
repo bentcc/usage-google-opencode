@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.2.0] - 2026-02-20
+
+### Fixed
+
+#### Gemini CLI Quota Fetching (Aligned with Real gemini-cli)
+- **User-Agent**: Replaced incorrect `google-api-nodejs-client/9.15.1` with `GeminiCLI/<version>/<model> (<platform>; <arch>)` matching the real Gemini CLI format from `contentGenerator.ts`.
+- **Extraneous headers**: Removed `X-Goog-Api-Client` and `Client-Metadata` headers. The real gemini-cli does not send these as HTTP headers (`ClientMetadata` is a JSON body field used only for telemetry).
+- **Endpoint strategy**: Removed sandbox endpoint fallback (daily + autopush). The real gemini-cli uses only the production endpoint (`cloudcode-pa.googleapis.com`). Now uses retry logic (3 attempts, 1s delay) matching the antigravity path.
+- **Response type**: Added `remainingAmount` (string) and `tokenType` (string) fields to `RetrieveUserQuotaResponse` bucket type, matching gemini-cli's `BucketInfo` from `code_assist/types.ts`.
+
+### Changed
+- **Unified retry logic**: Both antigravity and gemini-cli identities now use the same retry strategy (3 attempts, 1s delay, 403 throws immediately). Removed separate `fetchQuotaWithEndpointFallback` function.
+- **Test count**: Increased from 80 to 82 tests (added gemini-cli retry and 403 no-retry tests).
+
+---
+
 ## [1.1.0] - 2026-02-20
 
 ### Fixed
@@ -129,8 +145,8 @@ OAuth client credentials are hardcoded in `src/oauth/constants.ts` by design. Th
 - Strategy: Retry up to 3 times with 1s delay (403 throws immediately)
 
 **Gemini CLI Quota:**
-- Primary: `https://cloudcode-pa.googleapis.com/v1internal:retrieveUserQuota`
-- Fallbacks: Daily and autopush sandbox endpoints
+- Endpoint: `https://cloudcode-pa.googleapis.com/v1internal:retrieveUserQuota`
+- Strategy: Retry up to 3 times with 1s delay (403 throws immediately)
 
 **Project Discovery:**
 - Primary: `https://daily-cloudcode-pa.sandbox.googleapis.com/v1internal:loadCodeAssist`
@@ -195,5 +211,6 @@ This is the first production release. If you were using development versions:
 
 ---
 
+[1.2.0]: https://github.com/bentcc/usage-google-opencode/releases/tag/v1.2.0
 [1.1.0]: https://github.com/bentcc/usage-google-opencode/releases/tag/v1.1.0
 [1.0.0]: https://github.com/bentcc/usage-google-opencode/releases/tag/v1.0.0

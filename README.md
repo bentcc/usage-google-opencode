@@ -202,7 +202,7 @@ Default location: `~/.config/opencode/usage-google-accounts.json`
 - **Windows:** `%APPDATA%\opencode\`
 
 ### Network Timeouts
-- **Endpoint timeout:** 15 seconds per request (with retry for antigravity)
+- **Endpoint timeout:** 15 seconds per request (with retry up to 3 times for both identities)
 - **Login timeout:** 2 minutes for OAuth callback
 
 ### Quota Reset Times
@@ -239,7 +239,7 @@ node dist/index.js status
 ## 📝 Known Limitations
 
 - Concurrent `login` commands may cause storage corruption (atomic writes mitigate this in v1.0.0+)
-- Network requests timeout after 15 seconds; antigravity quota retries up to 3 times
+- Network requests timeout after 15 seconds; both identities retry up to 3 times (403 errors throw immediately)
 - Gemini CLI quota requires a GCP project ID
 
 ---
