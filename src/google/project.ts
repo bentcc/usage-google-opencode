@@ -3,24 +3,24 @@
  * Used when no project ID is stored for an account.
  */
 
-// Fetch timeout in milliseconds (10 seconds per endpoint)
-const FETCH_TIMEOUT_MS = 10000;
+// Fetch timeout in milliseconds (15 seconds, matching Antigravity-Manager)
+const FETCH_TIMEOUT_MS = 15000;
 
 /**
  * Endpoints to try for loadCodeAssist, in order.
- * Production endpoint is most reliable for project resolution.
+ * Daily sandbox is primary (avoids prod 429 rate limits, matches Antigravity-Manager).
+ * Production endpoint as fallback.
  */
 export const LOAD_CODE_ASSIST_ENDPOINTS = [
-  "https://cloudcode-pa.googleapis.com/v1internal:loadCodeAssist",
   "https://daily-cloudcode-pa.sandbox.googleapis.com/v1internal:loadCodeAssist",
-  "https://autopush-cloudcode-pa.sandbox.googleapis.com/v1internal:loadCodeAssist",
+  "https://cloudcode-pa.googleapis.com/v1internal:loadCodeAssist",
 ] as const;
 
 /**
  * Fallback project ID when no project can be discovered.
- * This is a known working project ID from the Antigravity ecosystem.
+ * This is the current known working project ID from the Antigravity ecosystem.
  */
-export const DEFAULT_PROJECT_ID = "rising-fact-p41fc";
+export const DEFAULT_PROJECT_ID = "bamboo-precept-lgxtn";
 
 type FetchLike = (input: string | URL, init?: RequestInit) => Promise<Response>;
 
@@ -46,6 +46,29 @@ export class ProjectError extends Error {
 interface LoadCodeAssistResponse {
   cloudaicompanionProject?: string | { id?: string };
   projectId?: string; // Some responses use this directly
+}
+
+/**
+ * Known stable Antigravity version configuration.
+ * Antigravity 1.16.5 uses Electron 39.2.3 / Chrome 132.0.6834.160.
+ */
+const KNOWN_STABLE_VERSION = "1.16.5";
+const KNOWN_STABLE_CHROME = "132.0.6834.160";
+const KNOWN_STABLE_ELECTRON = "39.2.3";
+
+/**
+ * Builds a User-Agent string matching the official Antigravity Electron client format.
+ */
+function buildAntigravityUserAgent(): string {
+  const platform = process.platform;
+  const platformInfo =
+    platform === "darwin"
+      ? "Macintosh; Intel Mac OS X 10_15_7"
+      : platform === "win32"
+        ? "Windows NT 10.0; Win64; x64"
+        : "X11; Linux x86_64";
+
+  return `Mozilla/5.0 (${platformInfo}) AppleWebKit/537.36 (KHTML, like Gecko) Antigravity/${KNOWN_STABLE_VERSION} Chrome/${KNOWN_STABLE_CHROME} Electron/${KNOWN_STABLE_ELECTRON} Safari/537.36`;
 }
 
 /**
@@ -111,15 +134,14 @@ async function fetchWithTimeout(
 }
 
 /**
- * Request headers for loadCodeAssist to match the working implementation.
+ * Request headers for loadCodeAssist matching the working Antigravity-Manager.
+ * Uses Electron-style User-Agent; no X-Goog-Api-Client or Client-Metadata headers.
  */
 function buildHeaders(accessToken: string): Record<string, string> {
   return {
     Authorization: `Bearer ${accessToken}`,
     "Content-Type": "application/json",
-    "User-Agent": "google-api-nodejs-client/9.15.1",
-    "X-Goog-Api-Client": "google-cloud-sdk vscode_cloudshelleditor/0.1",
-    "Client-Metadata": '{"ideType":"IDE_UNSPECIFIED","platform":"PLATFORM_UNSPECIFIED","pluginType":"GEMINI"}',
+    "User-Agent": buildAntigravityUserAgent(),
   };
 }
 
@@ -162,9 +184,7 @@ export async function ensureProjectId(input: {
   const headers = buildHeaders(input.accessToken);
   const body = JSON.stringify({
     metadata: {
-      ideType: "IDE_UNSPECIFIED",
-      platform: "PLATFORM_UNSPECIFIED",
-      pluginType: "GEMINI",
+      ideType: "ANTIGRAVITY",
     },
   });
 

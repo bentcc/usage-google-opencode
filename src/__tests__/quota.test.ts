@@ -58,6 +58,37 @@ describe("parseQuotaResponse", () => {
     });
   });
 
+  it("includes image and imagen models in the filter", () => {
+    // Arrange
+    const apiResponse = {
+      models: {
+        "gemini-flash": {
+          quotaInfo: { remainingFraction: 0.5, resetTime: "t1" },
+        },
+        "imagen-3": {
+          quotaInfo: { remainingFraction: 0.8, resetTime: "t2" },
+        },
+        "image-generation-model": {
+          quotaInfo: { remainingFraction: 0.6, resetTime: "t3" },
+        },
+        "unrelated-model": {
+          quotaInfo: { remainingFraction: 1.0, resetTime: "t4" },
+        },
+      },
+    };
+
+    // Act
+    const parsed = parseQuotaResponse(apiResponse);
+
+    // Assert - gemini, imagen, image included; unrelated excluded
+    expect(parsed).toHaveLength(3);
+    expect(parsed.map((m) => m.model).sort()).toEqual([
+      "gemini-flash",
+      "image-generation-model",
+      "imagen-3",
+    ]);
+  });
+
   it("handles missing quotaInfo gracefully", () => {
     // Arrange
     const apiResponse = {
@@ -114,7 +145,7 @@ describe("fetchQuota", () => {
       fetchImpl: fakeFetch,
     });
 
-    // Assert - verify request (uses first endpoint in array)
+    // Assert - verify request (uses prod endpoint only)
     expect(calls).toHaveLength(1);
     expect(calls[0].url).toBe(FETCH_AVAILABLE_MODELS_ENDPOINTS[0]);
     expect(calls[0].init.method).toBe("POST");
@@ -160,7 +191,7 @@ describe("fetchQuota", () => {
     }
   });
 
-  it("includes identity-specific headers for antigravity", async () => {
+  it("includes Electron-style User-Agent for antigravity (no X-Goog-Api-Client)", async () => {
     // Arrange
     const apiResponse = { models: {} };
     const { fetch: fakeFetch, calls } = createFakeFetch(apiResponse);
@@ -173,10 +204,14 @@ describe("fetchQuota", () => {
       fetchImpl: fakeFetch,
     });
 
-    // Assert - verify antigravity headers
+    // Assert - verify Electron-style User-Agent matching Antigravity-Manager
     const headers = calls[0].init.headers as Record<string, string>;
-    expect(headers["User-Agent"]).toContain("antigravity");
-    expect(headers["X-Goog-Api-Client"]).toContain("vscode_cloudshelleditor");
+    expect(headers["User-Agent"]).toContain("Antigravity/");
+    expect(headers["User-Agent"]).toContain("Chrome/");
+    expect(headers["User-Agent"]).toContain("Electron/");
+    // Should NOT have X-Goog-Api-Client or Client-Metadata
+    expect(headers["X-Goog-Api-Client"]).toBeUndefined();
+    expect(headers["Client-Metadata"]).toBeUndefined();
   });
 
   it("includes identity-specific headers for gemini-cli", async () => {
@@ -231,5 +266,60 @@ describe("fetchQuota", () => {
         resetTime: "2026-01-30T10:52:51Z",
       },
     ]);
+  });
+
+  it("retries on non-403 HTTP errors for antigravity identity", async () => {
+    // Arrange - first two calls return 500, third returns success
+    let callCount = 0;
+    const calls: FakeCall[] = [];
+    const fakeFetch = async (url: string | URL, init?: RequestInit) => {
+      calls.push({ url: String(url), init: init ?? {} });
+      callCount++;
+      if (callCount <= 2) {
+        return new Response("Server error", { status: 500 });
+      }
+      return new Response(JSON.stringify({
+        models: {
+          "gemini-pro": {
+            quotaInfo: { remainingFraction: 0.8, resetTime: "2026-02-01T00:00:00Z" },
+          },
+        },
+      }), { status: 200 });
+    };
+
+    // Act
+    const result = await fetchQuota({
+      accessToken: "test-token",
+      projectId: "my-project",
+      identity: "antigravity",
+      fetchImpl: fakeFetch as typeof fetch,
+    });
+
+    // Assert - retried and eventually succeeded
+    expect(calls).toHaveLength(3);
+    expect(result).toHaveLength(1);
+    expect(result[0].model).toBe("gemini-pro");
+  });
+
+  it("does not retry on 403 for antigravity identity", async () => {
+    // Arrange
+    const calls: FakeCall[] = [];
+    const fakeFetch = async (url: string | URL, init?: RequestInit) => {
+      calls.push({ url: String(url), init: init ?? {} });
+      return new Response(JSON.stringify({ error: "forbidden" }), { status: 403 });
+    };
+
+    // Act & Assert - 403 throws immediately, no retry
+    await expect(
+      fetchQuota({
+        accessToken: "test-token",
+        projectId: "my-project",
+        identity: "antigravity",
+        fetchImpl: fakeFetch as typeof fetch,
+      }),
+    ).rejects.toThrow("Forbidden");
+
+    // Should only have made 1 call (no retries for 403)
+    expect(calls).toHaveLength(1);
   });
 });

@@ -5,20 +5,23 @@
 
 import type { QuotaIdentity } from "../oauth/constants.js";
 
-// Fetch timeout in milliseconds (10 seconds per endpoint)
-const FETCH_TIMEOUT_MS = 10000;
+// Fetch timeout in milliseconds (15 seconds, matching Antigravity-Manager)
+const FETCH_TIMEOUT_MS = 15000;
+
+// Retry configuration matching Antigravity-Manager behavior
+const MAX_RETRIES = 3;
+const RETRY_DELAY_MS = 1000;
 
 /**
- * Endpoints to try for fetchAvailableModels, in order.
+ * Production endpoint for fetchAvailableModels (antigravity identity).
+ * The working Antigravity-Manager only uses the prod endpoint.
  */
 export const FETCH_AVAILABLE_MODELS_ENDPOINTS = [
   "https://cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels",
-  "https://daily-cloudcode-pa.sandbox.googleapis.com/v1internal:fetchAvailableModels",
-  "https://autopush-cloudcode-pa.sandbox.googleapis.com/v1internal:fetchAvailableModels",
 ] as const;
 
 /**
- * Endpoints to try for retrieveUserQuota, in order.
+ * Endpoints to try for retrieveUserQuota (gemini-cli identity), in order.
  */
 export const RETRIEVE_USER_QUOTA_ENDPOINTS = [
   "https://cloudcode-pa.googleapis.com/v1internal:retrieveUserQuota",
@@ -79,17 +82,42 @@ export interface RetrieveUserQuotaResponse {
 }
 
 /**
- * Models to include in quota reports (gemini or claude).
+ * Models to include in quota reports (gemini, claude, image generation).
+ * Matches the Antigravity-Manager filter which includes image/imagen models.
  */
-const MODEL_FILTER_PATTERN = /gemini|claude/i;
+const MODEL_FILTER_PATTERN = /gemini|claude|image|imagen/i;
+
+/**
+ * Known stable Antigravity version configuration.
+ * Antigravity 1.16.5 uses Electron 39.2.3 / Chrome 132.0.6834.160.
+ */
+const KNOWN_STABLE_VERSION = "1.16.5";
+const KNOWN_STABLE_CHROME = "132.0.6834.160";
+const KNOWN_STABLE_ELECTRON = "39.2.3";
+
+/**
+ * Builds a User-Agent string matching the official Antigravity Electron client format.
+ * The API validates User-Agent and rejects non-conforming strings.
+ */
+function buildAntigravityUserAgent(): string {
+  const platform = process.platform;
+  const platformInfo =
+    platform === "darwin"
+      ? "Macintosh; Intel Mac OS X 10_15_7"
+      : platform === "win32"
+        ? "Windows NT 10.0; Win64; x64"
+        : "X11; Linux x86_64";
+
+  return `Mozilla/5.0 (${platformInfo}) AppleWebKit/537.36 (KHTML, like Gecko) Antigravity/${KNOWN_STABLE_VERSION} Chrome/${KNOWN_STABLE_CHROME} Electron/${KNOWN_STABLE_ELECTRON} Safari/537.36`;
+}
 
 /**
  * Headers for Antigravity identity (IDE mode).
+ * Matches the working Antigravity-Manager: only Authorization, Content-Type, User-Agent.
+ * No X-Goog-Api-Client or Client-Metadata headers.
  */
 const ANTIGRAVITY_HEADERS = {
-  "User-Agent": "antigravity/1.11.5 windows/amd64",
-  "X-Goog-Api-Client": "google-cloud-sdk vscode_cloudshelleditor/0.1",
-  "Client-Metadata": '{"ideType":"IDE_UNSPECIFIED","platform":"PLATFORM_UNSPECIFIED","pluginType":"GEMINI"}',
+  "User-Agent": buildAntigravityUserAgent(),
 } as const;
 
 /**
@@ -112,13 +140,13 @@ function getHeadersForIdentity(identity: QuotaIdentity): Record<string, string> 
  * Parses the API response and extracts quota info for relevant models.
  *
  * @param response - Raw API response from fetchAvailableModels
- * @returns Array of ModelQuota for gemini/claude models only
+ * @returns Array of ModelQuota for gemini/claude/image models only
  */
 export function parseQuotaResponse(response: FetchAvailableModelsResponse): ModelQuota[] {
   const result: ModelQuota[] = [];
 
   for (const [modelName, modelData] of Object.entries(response.models)) {
-    // Filter to only gemini/claude models
+    // Filter to only relevant models (gemini, claude, image, imagen)
     if (!MODEL_FILTER_PATTERN.test(modelName)) {
       continue;
     }
@@ -202,14 +230,24 @@ async function fetchWithTimeout(
 }
 
 /**
+ * Delays execution for the specified number of milliseconds.
+ */
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
  * Fetches quota information from the Google Cloud Code API.
+ *
+ * For antigravity identity: uses prod endpoint with retry logic (up to 3 attempts).
+ * For gemini-cli identity: tries multiple endpoints sequentially.
  *
  * @param input.accessToken - Valid OAuth access token
  * @param input.projectId - Google Cloud project ID
  * @param input.identity - The quota identity (antigravity or gemini-cli)
  * @param input.fetchImpl - Optional fetch implementation for testing
- * @returns Array of ModelQuota for gemini/claude models
- * @throws {QuotaError} If all endpoints fail with HTTP errors
+ * @returns Array of ModelQuota for relevant models
+ * @throws {QuotaError} If all attempts/endpoints fail with HTTP errors
  */
 export async function fetchQuota(input: {
   accessToken: string;
@@ -246,13 +284,104 @@ export async function fetchQuota(input: {
 
   const body = JSON.stringify({ project: input.projectId });
   const isGeminiCli = identity === "gemini-cli";
-  const endpoints = isGeminiCli
-    ? RETRIEVE_USER_QUOTA_ENDPOINTS
-    : FETCH_AVAILABLE_MODELS_ENDPOINTS;
 
+  if (isGeminiCli) {
+    return fetchQuotaWithEndpointFallback(fetchImpl, RETRIEVE_USER_QUOTA_ENDPOINTS, headers, body, true);
+  }
+
+  // Antigravity: use prod endpoint with retry logic (matching Antigravity-Manager)
+  return fetchQuotaWithRetry(fetchImpl, FETCH_AVAILABLE_MODELS_ENDPOINTS[0], headers, body);
+}
+
+/**
+ * Fetches quota from a single endpoint with retry logic.
+ * Matches Antigravity-Manager's retry behavior: up to MAX_RETRIES attempts with RETRY_DELAY_MS between.
+ */
+async function fetchQuotaWithRetry(
+  fetchImpl: FetchLike,
+  endpoint: string,
+  headers: Record<string, string>,
+  body: string,
+): Promise<ModelQuota[]> {
   let lastError: Error | undefined;
 
-  // Try each endpoint in order
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      const res = await fetchWithTimeout(fetchImpl, endpoint, {
+        method: "POST",
+        headers,
+        body,
+      }, FETCH_TIMEOUT_MS);
+
+      if (!res.ok) {
+        // 403 should be thrown immediately - it's a real permission error, no retry
+        if (res.status === 403) {
+          throw new QuotaError({
+            message: `Forbidden: HTTP 403`,
+            status: 403,
+            endpoint,
+          });
+        }
+
+        // Other HTTP errors - retry
+        if (attempt < MAX_RETRIES) {
+          await delay(RETRY_DELAY_MS);
+          continue;
+        }
+        throw new QuotaError({
+          message: `HTTP ${res.status}`,
+          status: res.status,
+          endpoint,
+        });
+      }
+
+      const json = await readJsonSafe(res);
+      if (!json) {
+        return [];
+      }
+
+      const models = json as FetchAvailableModelsResponse;
+      if (!models.models) {
+        return [];
+      }
+
+      return parseQuotaResponse(models);
+    } catch (err) {
+      // Re-throw QuotaError (including 403)
+      if (err instanceof QuotaError) {
+        throw err;
+      }
+
+      lastError = err instanceof Error ? err : new Error(String(err));
+
+      // Network error - retry if attempts remain
+      if (attempt < MAX_RETRIES) {
+        await delay(RETRY_DELAY_MS);
+        continue;
+      }
+    }
+  }
+
+  // All retries exhausted
+  throw new QuotaError({
+    message: `Network error: ${lastError?.message ?? "All quota retries failed"}`,
+    status: 0,
+    endpoint,
+  });
+}
+
+/**
+ * Fetches quota by trying multiple endpoints sequentially (used for gemini-cli).
+ */
+async function fetchQuotaWithEndpointFallback(
+  fetchImpl: FetchLike,
+  endpoints: readonly string[],
+  headers: Record<string, string>,
+  body: string,
+  isGeminiCli: boolean,
+): Promise<ModelQuota[]> {
+  let lastError: Error | undefined;
+
   for (const endpoint of endpoints) {
     try {
       const res = await fetchWithTimeout(fetchImpl, endpoint, {
@@ -262,7 +391,6 @@ export async function fetchQuota(input: {
       }, FETCH_TIMEOUT_MS);
 
       if (!res.ok) {
-        // 403 should be thrown immediately - it's a real permission error
         if (res.status === 403) {
           throw new QuotaError({
             message: `Forbidden: HTTP 403`,
@@ -270,7 +398,6 @@ export async function fetchQuota(input: {
             endpoint,
           });
         }
-        // Other errors - try next endpoint
         continue;
       }
 
@@ -295,17 +422,13 @@ export async function fetchQuota(input: {
       return parseQuotaResponse(models);
     } catch (err) {
       lastError = err instanceof Error ? err : new Error(String(err));
-      
-      // Re-throw QuotaError (including 403)
       if (err instanceof QuotaError) {
         throw err;
       }
-      // Network error - try next endpoint
       continue;
     }
   }
 
-  // All endpoints failed - provide helpful error
   if (lastError) {
     throw new QuotaError({
       message: `Network error: ${lastError.message}`,

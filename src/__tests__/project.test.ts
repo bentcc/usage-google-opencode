@@ -53,14 +53,26 @@ describe("ensureProjectId", () => {
       fetchImpl: fakeFetch,
     });
 
-    // Assert - verify request
+    // Assert - verify request uses daily sandbox first
     expect(result).toBe("discovered-project-123");
     expect(calls).toHaveLength(1);
     expect(calls[0].url).toBe(LOAD_CODE_ASSIST_ENDPOINTS[0]);
+    expect(calls[0].url).toContain("daily-cloudcode-pa.sandbox");
     expect(calls[0].init.method).toBe("POST");
 
     const headers = calls[0].init.headers as Record<string, string>;
     expect(headers["Authorization"]).toBe("Bearer test-token");
+    // Verify Electron-style User-Agent
+    expect(headers["User-Agent"]).toContain("Antigravity/");
+    expect(headers["User-Agent"]).toContain("Chrome/");
+    expect(headers["User-Agent"]).toContain("Electron/");
+    // Should NOT have X-Goog-Api-Client or Client-Metadata
+    expect(headers["X-Goog-Api-Client"]).toBeUndefined();
+    expect(headers["Client-Metadata"]).toBeUndefined();
+
+    // Verify body uses ideType: ANTIGRAVITY
+    const body = JSON.parse(calls[0].init.body as string);
+    expect(body.metadata.ideType).toBe("ANTIGRAVITY");
   });
 
   it("extracts projectId from cloudaicompanionProject object format", async () => {
@@ -92,6 +104,7 @@ describe("ensureProjectId", () => {
 
     // Assert - tried all endpoints, returned default
     expect(result).toBe(DEFAULT_PROJECT_ID);
+    expect(result).toBe("bamboo-precept-lgxtn");
     expect(calls.length).toBe(LOAD_CODE_ASSIST_ENDPOINTS.length);
   });
 

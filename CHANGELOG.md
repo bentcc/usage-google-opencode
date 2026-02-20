@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.1.0] - 2026-02-20
+
+### Fixed
+
+#### Antigravity Quota Fetching (Critical)
+- **User-Agent**: Replaced static `antigravity/1.11.5 windows/amd64` with full Electron-style User-Agent matching the official Antigravity client (`Mozilla/5.0 (...) Antigravity/1.16.5 Chrome/132.0.6834.160 Electron/39.2.3 Safari/537.36`). The API rejects non-conforming User-Agent strings.
+- **Extraneous headers**: Removed `X-Goog-Api-Client` and `Client-Metadata` headers from antigravity quota requests (the working Antigravity-Manager does not send them).
+- **Endpoint strategy**: Antigravity quota now uses only the production endpoint with retry logic (3 attempts, 1s delay) instead of trying 3 endpoints sequentially. This matches the Antigravity-Manager behavior.
+- **403 handling**: 403 Forbidden errors are still thrown immediately without retry.
+
+#### Project ID Discovery
+- **Primary endpoint**: Switched from production to daily sandbox (`daily-cloudcode-pa.sandbox.googleapis.com`) as primary, avoiding 429 rate limits. Production is now a fallback.
+- **ideType**: Changed from `IDE_UNSPECIFIED` to `ANTIGRAVITY` to match the working implementation.
+- **User-Agent**: Updated to use the same Electron-style User-Agent as quota requests.
+- **Fallback project**: Updated default from `rising-fact-p41fc` to `bamboo-precept-lgxtn`.
+
+### Changed
+- **Model filter**: Expanded from `/gemini|claude/i` to `/gemini|claude|image|imagen/i` to include image generation models.
+- **Fetch timeout**: Increased from 10s to 15s per request, matching the Antigravity-Manager.
+- **Test count**: Increased from 77 to 80 tests (added retry, 403 no-retry, and image model filter tests).
+
+---
+
 ## [1.0.0] - 2026-01-31
 
 ### 🎉 Initial Release
@@ -46,7 +69,7 @@ First production-ready release of usage-google-opencode CLI tool for monitoring 
 - **Refresh Token Security**: Tokens stored with restrictive permissions
 - **No Token Logging**: Refresh tokens never printed to console
 - **Graceful Shutdown**: SIGINT/SIGTERM handlers for clean exits
-- **Network Timeouts**: 10-second timeouts prevent hanging on slow networks
+- **Network Timeouts**: 15-second timeouts prevent hanging on slow networks
 
 ### 🚀 Performance
 
@@ -82,7 +105,7 @@ First production-ready release of usage-google-opencode CLI tool for monitoring 
 
 ### 🧪 Testing
 
-- 77 passing unit tests
+- 80 passing unit tests
 - Full test coverage for core modules
 - Integration tests for CLI commands
 - Mocked network calls for reliable testing
@@ -102,17 +125,17 @@ OAuth client credentials are hardcoded in `src/oauth/constants.ts` by design. Th
 ### API Endpoints
 
 **Antigravity Quota:**
-- Primary: `https://cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels`
-- Fallbacks: Daily and autopush sandbox endpoints
+- Endpoint: `https://cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels`
+- Strategy: Retry up to 3 times with 1s delay (403 throws immediately)
 
 **Gemini CLI Quota:**
 - Primary: `https://cloudcode-pa.googleapis.com/v1internal:retrieveUserQuota`
 - Fallbacks: Daily and autopush sandbox endpoints
 
 **Project Discovery:**
-- Primary: `https://cloudcode-pa.googleapis.com/v1internal:loadCodeAssist`
-- Fallbacks: Daily and autopush sandbox endpoints
-- Default: `rising-fact-p41fc` (if all endpoints fail)
+- Primary: `https://daily-cloudcode-pa.sandbox.googleapis.com/v1internal:loadCodeAssist`
+- Fallback: `https://cloudcode-pa.googleapis.com/v1internal:loadCodeAssist`
+- Default: `bamboo-precept-lgxtn` (if all endpoints fail)
 
 ### Development Timeline
 
@@ -129,7 +152,7 @@ OAuth client credentials are hardcoded in `src/oauth/constants.ts` by design. Th
 ### Current Limitations
 - Concurrent login commands may cause storage corruption (mitigated with atomic writes)
 - Gemini CLI quota requires manual project ID specification
-- Network requests timeout after 10 seconds per endpoint
+- Network requests timeout after 15 seconds per endpoint
 - Email addresses displayed in output (privacy consideration)
 
 ### Future Enhancements (Potential)
@@ -172,4 +195,5 @@ This is the first production release. If you were using development versions:
 
 ---
 
+[1.1.0]: https://github.com/bentcc/usage-google-opencode/releases/tag/v1.1.0
 [1.0.0]: https://github.com/bentcc/usage-google-opencode/releases/tag/v1.0.0
