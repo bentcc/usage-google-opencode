@@ -60,7 +60,7 @@ export function renderTable(reports: AccountQuotaReport[], errors: IdentityError
 
   const summaryAllowlist = [
     "claude-opus-4-6-thinking",
-    "gemini-3-pro-high",
+    "gemini-3.1-pro-high",
     "gemini-3-pro-image",
     "gemini-3-pro-preview",
     "gemini-3-flash-preview",
