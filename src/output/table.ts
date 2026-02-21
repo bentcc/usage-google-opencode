@@ -121,10 +121,13 @@ export function renderTable(reports: AccountQuotaReport[], errors: IdentityError
     lines.push("├" + "─".repeat(innerWidth) + "┤");
   };
 
-  const renderRows = (rows: AccountQuotaReport[]) => {
+  const renderRows = (rows: AccountQuotaReport[], sortModels = false) => {
     for (const identity of orderedIdentities) {
       for (const report of rows.filter((row) => row.identity === identity)) {
-        for (const model of report.models) {
+        const models = sortModels
+          ? [...report.models].sort((a, b) => a.model.localeCompare(b.model))
+          : report.models;
+        for (const model of models) {
           const email = report.email.slice(0, emailWidth - 1).padEnd(emailWidth);
           const identityLabel = report.identity.slice(0, identityWidth - 1).padEnd(identityWidth);
           const modelName = model.model.padEnd(modelWidth);
@@ -194,7 +197,7 @@ export function renderTable(reports: AccountQuotaReport[], errors: IdentityError
       "│"
   );
   lines.push("├" + "─".repeat(innerWidth) + "┤");
-  renderRows(reports);
+  renderRows(reports, true);
   renderErrors();
   lines.push("└" + "─".repeat(innerWidth) + "┘");
 

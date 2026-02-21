@@ -201,6 +201,35 @@ describe("renderTable", () => {
     expect(output).toContain("Action required:");
   });
 
+  it("sorts models alphabetically in full detail table but preserves allowlist order in summary", () => {
+    const reports: AccountQuotaReport[] = [
+      {
+        email: "user@example.com",
+        identity: "antigravity",
+        projectId: "proj-1",
+        models: [
+          { model: "gemini-2.5-pro", remainingPercent: 50, resetTime: "" },
+          { model: "claude-opus-4", remainingPercent: 80, resetTime: "" },
+          { model: "alpha-model", remainingPercent: 90, resetTime: "" },
+        ],
+        fetchedAt: Date.now(),
+      },
+    ];
+    const output = renderTable(reports, []);
+
+    // Extract only the "Full detail" section
+    const fullDetailSection = output.split("Full detail")[1];
+    const dataLines = fullDetailSection
+      .split("\n")
+      .filter((l) => l.startsWith("│") && l.includes("user@example.com"));
+
+    // Assert - models should appear in alphabetical order (a-z)
+    expect(dataLines).toHaveLength(3);
+    expect(dataLines[0]).toContain("alpha-model");
+    expect(dataLines[1]).toContain("claude-opus-4");
+    expect(dataLines[2]).toContain("gemini-2.5-pro");
+  });
+
   it("truncates long email addresses", () => {
     const reports: AccountQuotaReport[] = [
       {
