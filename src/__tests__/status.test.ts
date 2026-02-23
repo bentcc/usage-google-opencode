@@ -28,6 +28,7 @@ describe("status command", () => {
 
   const createMockDeps = (): StatusDeps => ({
     loadStore: vi.fn().mockResolvedValue(mockStore),
+    saveStore: vi.fn().mockResolvedValue(undefined),
     refreshAccessToken: vi.fn().mockResolvedValue({
       accessToken: "mock-access-token",
       expiresAt: Date.now() / 1000 + 3600,
@@ -193,5 +194,109 @@ describe("status command", () => {
 
     expect(result.reports).toHaveLength(1);
     expect(result.reports[0].identity).toBe("antigravity");
+  });
+
+  it("skips refreshAccessToken when cached token is still valid", async () => {
+    const futureExpiry = Math.floor(Date.now() / 1000) + 7200; // 2 hours from now
+    const cachedStore: UsageOpencodeStore = {
+      version: 1,
+      accounts: [
+        {
+          email: "cached@example.com",
+          projectId: "test-project",
+          antigravity: {
+            refreshToken: "antigravity-refresh",
+            cachedAccessToken: "cached-token-ag",
+            cachedExpiresAt: futureExpiry,
+          },
+          geminiCli: {
+            refreshToken: "gemini-refresh",
+            cachedAccessToken: "cached-token-gc",
+            cachedExpiresAt: futureExpiry,
+          },
+          addedAt: 0,
+          updatedAt: 0,
+        },
+      ],
+    };
+
+    const deps = createMockDeps();
+    deps.loadStore = vi.fn().mockResolvedValue(cachedStore);
+
+    const result = await runStatus({ deps });
+
+    // Should NOT call refreshAccessToken at all — cached tokens are valid
+    expect(deps.refreshAccessToken).toHaveBeenCalledTimes(0);
+    // Should still fetch quota for both identities
+    expect(deps.fetchQuota).toHaveBeenCalledTimes(2);
+    expect(result.reports).toHaveLength(2);
+  });
+
+  it("refreshes token when cached token is expired", async () => {
+    const pastExpiry = Math.floor(Date.now() / 1000) - 60; // expired 1 minute ago
+    const expiredStore: UsageOpencodeStore = {
+      version: 1,
+      accounts: [
+        {
+          email: "expired@example.com",
+          projectId: "test-project",
+          antigravity: {
+            refreshToken: "antigravity-refresh",
+            cachedAccessToken: "old-token",
+            cachedExpiresAt: pastExpiry,
+          },
+          addedAt: 0,
+          updatedAt: 0,
+        },
+      ],
+    };
+
+    const deps = createMockDeps();
+    deps.loadStore = vi.fn().mockResolvedValue(expiredStore);
+
+    const result = await runStatus({ deps });
+
+    // Should call refreshAccessToken since cached token is expired
+    expect(deps.refreshAccessToken).toHaveBeenCalledTimes(1);
+    expect(result.reports).toHaveLength(1);
+  });
+
+  it("persists refreshed tokens to store via saveStore", async () => {
+    const deps = createMockDeps();
+    await runStatus({ deps });
+
+    // Should have called saveStore to persist the new tokens
+    expect(deps.saveStore).toHaveBeenCalledTimes(1);
+    const savedStore = (deps.saveStore as any).mock.calls[0][1] as UsageOpencodeStore;
+    expect(savedStore.accounts[0].antigravity?.cachedAccessToken).toBe("mock-access-token");
+    expect(savedStore.accounts[0].geminiCli?.cachedAccessToken).toBe("mock-access-token");
+  });
+
+  it("does not call saveStore when all tokens were cached", async () => {
+    const futureExpiry = Math.floor(Date.now() / 1000) + 7200;
+    const cachedStore: UsageOpencodeStore = {
+      version: 1,
+      accounts: [
+        {
+          email: "cached@example.com",
+          projectId: "test-project",
+          antigravity: {
+            refreshToken: "r1",
+            cachedAccessToken: "cached-token",
+            cachedExpiresAt: futureExpiry,
+          },
+          addedAt: 0,
+          updatedAt: 0,
+        },
+      ],
+    };
+
+    const deps = createMockDeps();
+    deps.loadStore = vi.fn().mockResolvedValue(cachedStore);
+
+    await runStatus({ deps });
+
+    // No tokens were refreshed, so no need to update store
+    expect(deps.saveStore).not.toHaveBeenCalled();
   });
 });

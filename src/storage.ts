@@ -10,6 +10,8 @@ export type UsageOpencodeStore = {
 export type UsageOpencodeIdentity = {
   refreshToken: string;
   projectId?: string; // Identity-specific project ID
+  cachedAccessToken?: string; // Cached OAuth access token (avoids refresh round-trip)
+  cachedExpiresAt?: number; // Unix seconds when cachedAccessToken expires
 };
 
 export type UsageOpencodeAccount = {

@@ -4,13 +4,16 @@
  */
 
 import type { QuotaIdentity } from "../oauth/constants.js";
-import type { UsageOpencodeStore, UsageOpencodeAccount } from "../storage.js";
-import { loadStore as defaultLoadStore } from "../storage.js";
+import type { UsageOpencodeStore, UsageOpencodeAccount, UsageOpencodeIdentity } from "../storage.js";
+import { loadStore as defaultLoadStore, saveStore as defaultSaveStore } from "../storage.js";
 import { refreshAccessToken as defaultRefreshAccessToken } from "../oauth/token.js";
 import { ensureProjectId as defaultEnsureProjectId } from "../google/project.js";
 import { fetchQuota as defaultFetchQuota, type ModelQuota } from "../google/quota.js";
 import { renderTable } from "../output/table.js";
 import { renderJson } from "../output/json.js";
+
+/** Minimum remaining lifetime (seconds) for a cached token to be reused. */
+const TOKEN_CACHE_MARGIN_S = 300;
 
 /**
  * Quota report for a single account + identity combination.
@@ -49,6 +52,7 @@ export interface StatusResult {
  */
 export interface StatusDeps {
   loadStore: (opts?: { configDir?: string }) => Promise<UsageOpencodeStore>;
+  saveStore: (opts: { configDir?: string } | undefined, store: UsageOpencodeStore) => Promise<void>;
   refreshAccessToken: (input: {
     identity: QuotaIdentity;
     refreshToken: string;
@@ -69,6 +73,7 @@ export interface StatusDeps {
 
 const defaultDeps: StatusDeps = {
   loadStore: defaultLoadStore,
+  saveStore: defaultSaveStore,
   refreshAccessToken: defaultRefreshAccessToken,
   ensureProjectId: defaultEnsureProjectId,
   fetchQuota: defaultFetchQuota,
@@ -111,20 +116,53 @@ function isForbiddenError(error: unknown): boolean {
 }
 
 /**
+ * Returns true when the cached access token is still valid for at least TOKEN_CACHE_MARGIN_S.
+ */
+function isCachedTokenValid(identityData: UsageOpencodeIdentity): boolean {
+  if (!identityData.cachedAccessToken || !identityData.cachedExpiresAt) return false;
+  const nowSec = Math.floor(Date.now() / 1000);
+  return identityData.cachedExpiresAt > nowSec + TOKEN_CACHE_MARGIN_S;
+}
+
+/** Result from fetchIdentityQuota, extended with cache metadata for persistence. */
+interface IdentityQuotaResult {
+  report?: AccountQuotaReport;
+  error?: IdentityError;
+  /** Email of the account this result belongs to. */
+  email: string;
+  /** Identity this result belongs to. */
+  identity: QuotaIdentity;
+  /** Fresh access token + expiry to write back to the store cache. */
+  tokenCache?: { accessToken: string; expiresAt: number };
+}
+
+/**
  * Fetches quota for a single identity of an account.
+ * Uses cached access token when still valid; otherwise refreshes and returns
+ * the new token for the caller to persist.
  */
 async function fetchIdentityQuota(
   account: UsageOpencodeAccount,
   identity: QuotaIdentity,
-  identityData: { refreshToken: string; projectId?: string },
+  identityData: UsageOpencodeIdentity,
   deps: StatusDeps,
-): Promise<{ report?: AccountQuotaReport; error?: IdentityError }> {
+): Promise<IdentityQuotaResult> {
   try {
-    // Refresh access token
-    const { accessToken } = await deps.refreshAccessToken({
-      identity,
-      refreshToken: identityData.refreshToken,
-    });
+    let accessToken: string;
+    let tokenCache: { accessToken: string; expiresAt: number } | undefined;
+
+    if (isCachedTokenValid(identityData)) {
+      // Re-use cached token — skip the network round-trip
+      accessToken = identityData.cachedAccessToken!;
+    } else {
+      // Must refresh — save the result so the caller can persist it
+      const refreshed = await deps.refreshAccessToken({
+        identity,
+        refreshToken: identityData.refreshToken,
+      });
+      accessToken = refreshed.accessToken;
+      tokenCache = { accessToken: refreshed.accessToken, expiresAt: refreshed.expiresAt };
+    }
 
     // Get identity-specific project ID, falling back to account-level (legacy)
     const storedProjectId = identityData.projectId ?? account.projectId;
@@ -143,6 +181,9 @@ async function fetchIdentityQuota(
     });
 
     return {
+      email: account.email,
+      identity,
+      tokenCache,
       report: {
         email: account.email,
         identity,
@@ -155,6 +196,8 @@ async function fetchIdentityQuota(
     const needsRelogin = isInvalidGrantError(error);
     const isForbidden = isForbiddenError(error);
     return {
+      email: account.email,
+      identity,
       error: {
         email: account.email,
         identity,
@@ -184,7 +227,7 @@ export async function runStatus(options: StatusOptions = {}): Promise<StatusResu
 
   const reports: AccountQuotaReport[] = [];
   const errors: IdentityError[] = [];
-  const tasks: Array<Promise<{ report?: AccountQuotaReport; error?: IdentityError }>> = [];
+  const tasks: Array<Promise<IdentityQuotaResult>> = [];
 
   // Queue quota fetches for all accounts/identities
   for (const account of accounts) {
@@ -206,9 +249,44 @@ export async function runStatus(options: StatusOptions = {}): Promise<StatusResu
   }
 
   const results = await Promise.all(tasks);
+
+  // Collect reports/errors and track whether any tokens were refreshed
+  let storeNeedsUpdate = false;
+  let updatedStore = store;
+
   for (const result of results) {
     if (result.report) reports.push(result.report);
     if (result.error) errors.push(result.error);
+
+    // Persist freshly-refreshed tokens back to the store cache
+    if (result.tokenCache) {
+      storeNeedsUpdate = true;
+      const accountIdx = updatedStore.accounts.findIndex((a) => a.email === result.email);
+      if (accountIdx !== -1) {
+        const acct = updatedStore.accounts[accountIdx];
+        const identityKey = result.identity === "antigravity" ? "antigravity" : "geminiCli";
+        const existing = acct[identityKey];
+        if (existing) {
+          const updatedAccounts = updatedStore.accounts.slice();
+          updatedAccounts[accountIdx] = {
+            ...acct,
+            [identityKey]: {
+              ...existing,
+              cachedAccessToken: result.tokenCache.accessToken,
+              cachedExpiresAt: result.tokenCache.expiresAt,
+            },
+          };
+          updatedStore = { ...updatedStore, accounts: updatedAccounts };
+        }
+      }
+    }
+  }
+
+  // Fire-and-forget: persist token cache to disk (non-blocking)
+  if (storeNeedsUpdate) {
+    deps.saveStore({ configDir: options.configDir }, updatedStore).catch(() => {
+      // Swallow errors — cache persistence is best-effort
+    });
   }
 
   // Render output

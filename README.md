@@ -57,7 +57,7 @@ npm link
 bun install
 bun run build
 bun pm pack
-bun install -g "$(pwd)/usage-google-opencode-1.2.0.tgz"
+bun install -g "$(pwd)/usage-google-opencode-1.2.1.tgz"
 ```
 
 Make sure `~/.bun/bin` is in your PATH:
@@ -168,8 +168,17 @@ Summary
   "accounts": [
     {
       "email": "user@example.com",
-      "antigravity": { "refreshToken": "..." },
-      "geminiCli": { "refreshToken": "...", "projectId": "my-project" },
+      "antigravity": {
+        "refreshToken": "...",
+        "cachedAccessToken": "...",
+        "cachedExpiresAt": 1234571490
+      },
+      "geminiCli": {
+        "refreshToken": "...",
+        "projectId": "my-project",
+        "cachedAccessToken": "...",
+        "cachedExpiresAt": 1234571490
+      },
       "addedAt": 1234567890,
       "updatedAt": 1234567890
     }
@@ -178,11 +187,11 @@ Summary
 ```
 
 ### Privacy Notes
-- ✅ Refresh tokens are securely stored with restrictive file permissions
-- ✅ Access tokens are ephemeral (never persisted)
-- ✅ Email addresses are displayed in status output
-- ⚠️ **Never commit the storage file to version control**
-- ⚠️ **Never share the storage file**
+- Refresh tokens are securely stored with restrictive file permissions
+- Access tokens are cached locally to speed up subsequent runs (valid ~1 hour, auto-refreshed when expired)
+- Email addresses are displayed in status output
+- **Never commit the storage file to version control**
+- **Never share the storage file**
 
 ### OAuth Credentials
 The OAuth client IDs and secrets are hardcoded by design. These are public client credentials extracted from:
@@ -202,8 +211,10 @@ Default location: `~/.config/opencode/usage-google-accounts.json`
 - **Windows:** `%APPDATA%\opencode\`
 
 ### Network Timeouts
+- **Token refresh timeout:** 10 seconds per request
 - **Endpoint timeout:** 15 seconds per request (with retry up to 3 times for both identities)
 - **Login timeout:** 2 minutes for OAuth callback
+- **Token caching:** Access tokens are cached locally and reused for up to 55 minutes (5-minute safety margin before expiry), eliminating one network round-trip on subsequent runs
 
 ### Quota Reset Times
 - Displayed as `2h30m` for times under 24 hours

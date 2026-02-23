@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.2.1] - 2026-02-23
+
+### Performance
+
+- **Access token caching**: Tokens are now cached to disk (`cachedAccessToken` / `cachedExpiresAt` on each identity). Subsequent runs within the token's ~1 hour lifetime skip the OAuth refresh round-trip, reducing wall-clock time from ~6s to ~2s on warm runs.
+- **Token refresh timeout**: Added 10-second `AbortController` timeout to `refreshAccessToken` (previously had no timeout, could hang indefinitely on slow networks).
+
+### Changed
+- `UsageOpencodeIdentity` type now includes optional `cachedAccessToken` and `cachedExpiresAt` fields.
+- `StatusDeps` interface now includes `saveStore` for persisting the token cache (fire-and-forget, best-effort).
+- **Test count**: Increased from 83 to 87 tests (added token cache hit, cache miss, cache persist, and cache skip tests).
+
+---
+
 ## [1.2.0] - 2026-02-20
 
 ### Fixed
@@ -211,6 +225,7 @@ This is the first production release. If you were using development versions:
 
 ---
 
+[1.2.1]: https://github.com/bentcc/usage-google-opencode/releases/tag/v1.2.1
 [1.2.0]: https://github.com/bentcc/usage-google-opencode/releases/tag/v1.2.0
 [1.1.0]: https://github.com/bentcc/usage-google-opencode/releases/tag/v1.1.0
 [1.0.0]: https://github.com/bentcc/usage-google-opencode/releases/tag/v1.0.0

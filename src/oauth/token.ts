@@ -2,6 +2,9 @@ import { getOAuthClient, type QuotaIdentity } from "./constants.js";
 
 export const GOOGLE_OAUTH_TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token";
 
+/** Timeout for token endpoint requests (10 seconds). */
+const TOKEN_TIMEOUT_MS = 10000;
+
 type FetchLike = (input: string | URL, init?: RequestInit) => Promise<Response>;
 
 export class OAuthTokenError extends Error {
@@ -55,13 +58,31 @@ async function postToken(input: {
   fetchImpl: FetchLike;
   form: Record<string, string>;
 }): Promise<any> {
-  const res = await input.fetchImpl(GOOGLE_OAUTH_TOKEN_ENDPOINT, {
-    method: "POST",
-    headers: {
-      "content-type": "application/x-www-form-urlencoded",
-    },
-    body: buildFormBody(input.form),
-  });
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), TOKEN_TIMEOUT_MS);
+
+  let res: Response;
+  try {
+    res = await input.fetchImpl(GOOGLE_OAUTH_TOKEN_ENDPOINT, {
+      method: "POST",
+      headers: {
+        "content-type": "application/x-www-form-urlencoded",
+      },
+      body: buildFormBody(input.form),
+      signal: controller.signal,
+    });
+  } catch (err) {
+    clearTimeout(timeoutId);
+    if (err instanceof Error && err.name === "AbortError") {
+      throw new OAuthTokenError({
+        message: `Token request timed out after ${TOKEN_TIMEOUT_MS}ms`,
+        status: 0,
+        endpoint: GOOGLE_OAUTH_TOKEN_ENDPOINT,
+      });
+    }
+    throw err;
+  }
+  clearTimeout(timeoutId);
 
   const json = await readJsonSafe(res);
 

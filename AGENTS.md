@@ -147,3 +147,5 @@ export class QuotaError extends Error {
 - **Summary allowlist**: hardcoded list in `src/output/table.ts` controls which models appear in the summary table; all models appear in "Full detail"
 - **Account storage**: JSON file at `~/.config/opencode/usage-google-accounts.json`
 - **Immutable data**: `upsertAccount` returns new objects via spread, never mutates in place
+- **Token caching**: Access tokens are cached to the store file (`cachedAccessToken` / `cachedExpiresAt` fields on each identity). On subsequent runs within the token's ~1 hour lifetime (with a 5-minute safety margin), the OAuth refresh round-trip is skipped. Cache persistence is fire-and-forget (non-blocking, errors swallowed).
+- **Network timeouts**: Quota fetch and project discovery use 15s timeouts; token refresh uses a 10s timeout via `AbortController`. All timeouts throw on expiry rather than hanging.
