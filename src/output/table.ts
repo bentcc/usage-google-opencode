@@ -62,7 +62,7 @@ export function renderTable(reports: AccountQuotaReport[], errors: IdentityError
     "claude-opus-4-6-thinking",
     "gemini-3.1-pro-high",
     "gemini-3-pro-image",
-    "gemini-3-pro-preview",
+    "gemini-3.1-pro-preview",
     "gemini-3-flash-preview",
   ];
   const orderedIdentities: Array<AccountQuotaReport["identity"]> = ["antigravity", "gemini-cli"];
