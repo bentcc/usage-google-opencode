@@ -57,7 +57,7 @@ npm link
 bun install
 bun run build
 bun pm pack
-bun install -g "$(pwd)/usage-google-opencode-1.2.1.tgz"
+bun install -g "$(pwd)/usage-google-opencode-1.2.2.tgz"
 ```
 
 Make sure `~/.bun/bin` is in your PATH:
@@ -147,7 +147,7 @@ Summary
 │ Email                  Identity      Model                      Remaining  Reset      Status        │
 ├────────────────────────────────────────────────────────────────────────────────────────────────────┤
 │ user@example.com       antigravity   claude-opus-4-6-thinking   100%       2h30m      OK            │
-│ user@example.com       antigravity   gemini-3.1-pro-high        95%        2h30m      OK            │
+│ user@example.com       antigravity   gemini-3.1-flash-image     95%        2h30m      OK            │
 │ user@example.com       gemini-cli    gemini-3.1-pro-preview     100%       23h45m     OK            │
 └────────────────────────────────────────────────────────────────────────────────────────────────────┘
 ```

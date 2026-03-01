@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.2.2] - 2026-03-01
+
+### Changed
+- **Summary allowlist**: Replaced `gemini-3.1-pro-high` with `gemini-3.1-flash-image` and removed `gemini-3-pro-image` and `gemini-3-flash-preview` from the summary table.
+
+---
+
 ## [1.2.1] - 2026-02-23
 
 ### Performance
