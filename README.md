@@ -194,11 +194,7 @@ Summary
 - **Never share the storage file**
 
 ### OAuth Credentials
-The OAuth client IDs and secrets are hardcoded by design. These are public client credentials extracted from:
-- **Antigravity IDE** (for IDE quota)
-- **Google Cloud SDK / Gemini CLI** (for CLI quota)
-
-This is standard practice for OAuth public clients and poses no security risk.
+This is an unofficial tool and is not affiliated with or endorsed by Google. It interoperates with endpoints and OAuth client configuration used by existing Google developer tooling. These interfaces are not treated as stable public APIs and may change without notice.
 
 ---
 
@@ -263,7 +259,7 @@ MIT License - See LICENSE file for details
 
 ## 🙏 Acknowledgments
 
-- Built with assistance from AI
+- Built with AI-assisted development tools.
 - OAuth credentials extracted from official Google Cloud SDK and Antigravity IDE
 - Uses Google Cloud Code Assist internal APIs
 
@@ -282,10 +278,3 @@ See [CHANGELOG.md](CHANGELOG.md) for version history and updates.
 
 ---
 
-<div align="center">
-
-**⭐ If this tool helps you, consider giving it a star! ⭐**
-
-Made with ❤️ and AI assistance
-
-</div>
